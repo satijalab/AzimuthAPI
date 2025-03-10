@@ -157,7 +157,7 @@ ensure_argparse()
 library(argparse)
 
 #### other python dependencies
-python_module_path <- "/home/satijar/panhumanpy/src"
+python_module_path <- file.path("/home", Sys.getenv("USER"), "panhumanpy/src")
 py_run_string(paste("import sys; sys.path.append('", python_module_path, "')", sep = ""))
 annotate <- import("panhumanpy.core.ANNotate")
 sp <- import("scipy.sparse")
@@ -293,8 +293,8 @@ PrepLabel <- function(object, label_id = 'final_level_label', newid = 'PrepLabel
 ANNotate <- function(
                     query_obj,
                     feature_names_col=NULL,
-                    source_data_dir="/brahms/sarkars/AzimuthNN_clone/AzimuthNN/sarkars/data/dataset_main",
-                    features_txt="features_02_26_25_17_50.txt",
+                    source_data_dir="/data/kfold_data",
+                    features_txt="features.txt",
                     split_mode="cumulative",
                     model="M0.2",
                     loss_name="level_wt_focal_loss",
