@@ -14,26 +14,22 @@ library(argparse)
 
 #### other python dependencies
 python_module_path <- "/brahms/sarkars/AzimuthNN_clone/AzimuthNN/sarkars"
-py_run_string(paste("import sys; sys.path.append('", python_module_path, "')", sep = ""))
+py_run_string(paste("import sys; sys.path.append('", python_module_path, "')", sep = "")) 
 annotate <- import("ANNotate")
 sp <- import("scipy.sparse")
 
 #### functions
 
 read_obj_R <- function(query_filepath, feature_names_col) {
-  
   query_obj <- readRDS(query_filepath)
-  
   if ("data" %in% names(query_obj@assays$RNA)) {
     normalized_data <- LayerData(query_obj,layer = 'data')
   } else {
     query_obj <- NormalizeData(query_obj)
     normalized_data <- LayerData(query_obj,layer = 'data')
   }
-  
   X_query <- t(normalized_data)
   X_query <- Matrix(X_query, sparse = TRUE)
-  
   cell_metadata <- query_obj@meta.data
   query_cells_df <- as.data.frame(cell_metadata)
   
@@ -497,10 +493,21 @@ annotate_R <- function(){
   query_obj <- query$query_obj
   
   
+  #### reading the seurat object 
+  query <- read_obj_min(query_obj, feature_names_col)
+  X_query <- sp$csr_matrix(r_to_py(query$X_query))
+  query_features <- query$query_features
+  query_cells_df <- query$query_cells_df
+
+  
+  
+  
   #### run annotate_core
   core_outputs <- annotate$annotate_core(
     X_query,
     query_features,
+    source_data_dir,
+    features_txt,
     split_mode,
     model,
     epochs,
@@ -515,6 +522,7 @@ annotate_R <- function(){
     batch_size,
     optimizer_name,
     lr,
+    l1,
     l2, 
     dropout,
     save,
@@ -524,6 +532,7 @@ annotate_R <- function(){
     query_cells_df,
     if_knn_scores,
     if_umap_embeddings,
+    if_refine_labels,
     n_neighbors, 
     n_components, 
     metric, 
@@ -535,11 +544,12 @@ annotate_R <- function(){
     init
   )
   
+  
   embeddings_mode <- core_outputs[[3]]
   embeddings_dict <- core_outputs[[4]]
-  query_cells_df <- core_outputs[[9]]
-  if_umap_embeddings <- core_outputs[[10]]
-  umap_embeddings_dict <- core_outputs[[11]]
+  query_cells_df <- core_outputs[[10]]
+  if_umap_embeddings <- core_outputs[[11]]
+  umap_embeddings_dict <- core_outputs[[12]]
   
   annotated_obj = package_obj(embeddings_mode, embeddings_dict, if_umap_embeddings, umap_embeddings_dict, query_cells_df, query_obj)
   
