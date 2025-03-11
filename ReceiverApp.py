@@ -125,7 +125,7 @@ def download_output():
     # Check system resources first
     resources_ok, resource_info = check_system_resources()
     if not resources_ok:
-        return Response(json.dumps(resource_info), content_type='application/json', status=503)
+        return Response("System is currently under heavy load. Please try again in a few minutes.", status=503)
 
     output_file = request.args.get('output_file')
     if not output_file or not os.path.exists(output_file):
