@@ -92,7 +92,7 @@ PrepLabel <- function(object, label_id = 'final_level_label', newid = 'PrepLabel
   return(object)
 }
 
-CloudANNotate <- function(object = object, assay='RNA',ip='10.4.120.13',port=5000, normalize=TRUE) {
+CloudANNotate <- function(object = object, assay='RNA',ip='10.4.120.13',port=5000, normalize=FALSE) {
   
   # normalize data to be safe
   if (normalize) {
