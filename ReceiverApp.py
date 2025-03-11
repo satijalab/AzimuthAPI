@@ -34,7 +34,7 @@ def check_system_resources():
     print(f"DEBUG: Current CPU usage: {cpu_percent}%")
     print(f"DEBUG: Current memory usage: {memory_percent}%")
     
-    if cpu_percent > 75 or memory_percent > 75:
+    if cpu_percent > 20 or memory_percent > 20:
         return False, {
             'error': 'System is currently under heavy load. Please try again later.',
             'cpu_usage': cpu_percent,
@@ -44,6 +44,19 @@ def check_system_resources():
         'cpu_usage': cpu_percent,
         'memory_usage': memory_percent
     }
+
+# Stream progress updates, including real-time script output
+def progress_stream_error(resource_info):
+    try:
+        # Step 1: Notify file upload success
+        yield f"data: {json.dumps({'message': f'System is under heavy load (CPU: {resource_info["cpu_usage"]}%, Memory: {resource_info["memory_usage"]}%). Please try again later.'})}\n\n"
+        print("DEBUG: File successfully uploaded")
+        sys.stdout.flush()
+
+    except Exception as e:
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        print(f"DEBUG: Exception occurred: {e}")
+        sys.stdout.flush()
 
 # Stream progress updates, including real-time script output
 def progress_stream(input_file, output_file):
@@ -119,7 +132,8 @@ def process_rds():
     # Check system resources first
     resources_ok, resource_info = check_system_resources()
     if not resources_ok:
-        return Response("System is currently under heavy load. Please try again in a few minutes.", status=503)
+        print(f"DEBUG: FAIL")
+        return Response(progress_stream_error(resource_info), content_type='text/event-stream')
 
     if 'file' not in request.files:
         return Response("No file part in request", status=400)
