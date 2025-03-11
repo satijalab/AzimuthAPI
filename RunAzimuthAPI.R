@@ -94,17 +94,19 @@ PrepLabel <- function(object, label_id = 'final_level_label', newid = 'PrepLabel
 
 CloudANNotate <- function(object = object, assay='RNA',ip='10.4.120.13',port=5000, normalize=FALSE) {
   
+  message("Running Pan-Human Azimuth on the cloud!")
   # normalize data to be safe
   if (normalize) {
     object <- NormalizeData(object)
   }
   layer_name='data'
   data <- LayerData(object,assay = assay,layer = layer_name)
-  feature_file <- '/brahms/shared/AzimuthAPI/22tissue_nsforestfeatures.txt'
-  if (file.exists(feature_file)) {
+  feature_file <- 'https://raw.githubusercontent.com/rsatija/public_utils/refs/heads/main/features_v0.txt'
+  if (url.exists(feature_file)) {
     features <- readLines(feature_file)
     data <- data[intersect(features,rownames(data)),]
   }
+  message("Uploading dataset")
   suppressWarnings(srt <- CreateSeuratObject(CreateAssay5Object(data=data)))  
   tmpname <- tempfile()
   tmp_input <- paste0(tmpname,".rds")
