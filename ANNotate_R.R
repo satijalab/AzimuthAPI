@@ -43,7 +43,7 @@ setup_conda_env <- function(yml_file, requirements_file, conda_path=NULL, force_
     stop("Conda not found. Please install conda or miniconda and try again.")
   }
   
-  env_name <- "AzimuthNN_test" 
+  env_name <- "AzimuthNN_min" 
   
   env_check_command <- sprintf('%s env list | grep "%s"', conda_path, env_name)
   env_check <- system(env_check_command, intern = TRUE)
@@ -90,22 +90,6 @@ setup_conda_env <- function(yml_file, requirements_file, conda_path=NULL, force_
       ))
     } else {
       message(sprintf("Reticulate is correctly connected to: %s", active_env))
-    }
-    
-    if (!is.null(requirements_file) && file.exists(requirements_file)) {
-      message(sprintf("Installing pip dependencies from %s...", requirements_file))
-      system2(conda_path, c("run", "-n", env_name, "pip", "install", "-r", requirements_file))
-      system2(conda_path, c("run", "-n", env_name, "pip", "install", "--upgrade", "pip"))
-      system2(conda_path, c("run", "-n", env_name, "pip", "install", "--upgrade", "keras"))
-      if (if_gpu()){
-        system2(conda_path, c("run", "-n", env_name, "pip", "install", "tensorflow[and-cuda]==2.17"))
-      }else{
-        system2(conda_path, c("run", "-n", env_name, "pip", "install", "tensorflow-cpu==2.17.0"))
-      }
-      
-      message("All pip dependencies installed successfully.")
-    } else {
-      message("No requirements file provided or found.")
     }
     
     print(reticulate::py_config())
@@ -157,8 +141,9 @@ ensure_argparse()
 library(argparse)
 
 #### other python dependencies
-python_module_path <- file.path("/home", Sys.getenv("USER"), "panhumanpy/src")
-py_run_string(paste("import sys; sys.path.append('", python_module_path, "')", sep = ""))
+python_module_path <- file.path("/home", Sys.getenv("USER"), "panhumanpy/")
+python_module_src <- file.path("/home", Sys.getenv("USER"), "panhumanpy/src")
+py_run_string(paste("import sys; sys.path.append('", python_module_src, "')", sep = ""))
 annotate <- import("panhumanpy.core.ANNotate")
 sp <- import("scipy.sparse")
 
@@ -242,40 +227,30 @@ package_obj <- function(embeddings_mode, embeddings_dict, if_umap_embeddings, um
   
   if (!is.null(embeddings_mode)) {
     for (em_name in names(embeddings_dict)) {
-      
       em_matrix <- as.matrix(embeddings_dict[[em_name]])
       
       if (nrow(em_matrix) != length(Cells(query_obj))) {
         stop(paste("Dimension mismatch:", em_name, " does not have as many cells as the query obj."))
       }
-      
       rownames(em_matrix) <- Cells(query_obj)
-      
       dimreduc_obj <- CreateDimReducObject(embeddings = em_matrix, key = paste0("ANN", em_name, "_"), assay = DefaultAssay(query_obj))
-      
       query_obj[[paste0("ANN", em_name)]] <- dimreduc_obj
     }
   }
   
   if (if_umap_embeddings) {
     for (em_name in names(umap_embeddings_dict)) {
-      
       em_matrix <- as.matrix(umap_embeddings_dict[[em_name]])
-      
       if (nrow(em_matrix) != length(Cells(query_obj))) {
         stop(paste("Dimension mismatch:", em_name, " does not have as many cells as the query obj."))
       }
-      
       rownames(em_matrix) <- Cells(query_obj)
-      
       dimreduc_obj <- CreateDimReducObject(embeddings = em_matrix, key = paste0("umapANN", em_name, "_"), assay = DefaultAssay(query_obj))
-      
       query_obj[[paste0("umapANN", em_name)]] <- dimreduc_obj
     }
   }
   
   query_obj@meta.data <- as.data.frame(query_cells_df)  
-  
   return(query_obj)
 }
 
@@ -287,13 +262,10 @@ PrepLabel <- function(object, label_id = 'final_level_label', newid = 'PrepLabel
   return(object)
 }
 
-
-
-
 ANNotate <- function(
                     query_obj,
                     feature_names_col=NULL,
-                    source_data_dir="/data/kfold_data",
+                    source_data_dir="data/kfold_data",
                     features_txt="features.txt",
                     split_mode="cumulative",
                     model="M0.2",
@@ -301,7 +273,7 @@ ANNotate <- function(
                     epochs=55,
                     train_seed=100,
                     data_seed=414,
-                    data_source="data/kfold_data/datasets/fold10_02_26_2025_17_53_139",
+                    data_source="data/kfold_data",
                     data_split=c(7,1,2),
                     mask_seed=NULL,
                     tm_frac=NULL,
@@ -335,7 +307,7 @@ ANNotate <- function(
                     cutoff_frac=0.001){
 
   options(warn = -1)
-  
+  source_data_dir <- paste0(python_module_path, source_data_dir)
   cat("Running Pan-Human Azimuth:\n")
   cat("\n")
   
@@ -449,14 +421,14 @@ arg_parse_in_R <- function() {
   
   parser$add_argument(
     "-sdd", "--source_data_dir",
-    default = "/brahms/sarkars/AzimuthNN_clone/AzimuthNN/sarkars/data/dataset_main",
+    default = paste0(python_module_path, "data/kfold_data"),
     help = "Source data directory",
     type = "character"
   )
   
   parser$add_argument(
     "-ft", "--features_txt",
-    default = "features_02_26_25_17_50.txt",
+    default = "features.txt",
     help = "Features text file",
     type = "character"
   )
@@ -953,22 +925,21 @@ annotate_R <- function(){
   annotated_obj = package_obj(embeddings_mode, embeddings_dict, if_umap_embeddings, umap_embeddings_dict, query_cells_df, query_obj)
   
   # this is a joke about massively dieting the object
-  # so that we don't redownload expression data
+  # so that we don't redownload expression or embeddingdata
   # in this API case we know the object has an RNA assay with counts and data layers
   keto_object=TRUE
   if (keto_object) {
     annotated_obj[["RNA"]]$data <- Matrix(0, nrow=nrow(annotated_obj[["RNA"]]$data),ncol=ncol(annotated_obj[["RNA"]]$data))
+    if ("ANNshallow_embeddings" %in% names(annotated_obj@reductions)){
+      annotated_obj[["ANNshallow_embeddings"]] <- NULL
+    }
   }
   if (object_disk){
     dir_path <- dirname(query_filepath)
     file_name <- basename(query_filepath)
-    
     file_name_ann <- sub("\\.rds$", "_ANN.rds", file_name)
-    
     new_path <- file.path(dir_path, file_name_ann)
-    
     message("Saving annotated object to ", new_path)
-    
     saveRDS(annotated_obj, file = new_path)
   }
   
