@@ -13,6 +13,8 @@ def should_filter_line(line):
         "Traceback (most recent call last):",
         "File \"/home/ec2-user/miniconda3/envs/AzimuthNN_min/lib/python3.12/site-packages/tensorflow/python/pywrap_tensorflow.py\"",
         "import ssl",
+        "import _ssl",
+        "ssl.py",
         "File \"/home/ec2-user/R/x86_64-pc-linux-gnu-library/4.4/reticulate/python/rpytools/loader.py\"",
         "_find_and_load_hook",
         "return _run_hook",
