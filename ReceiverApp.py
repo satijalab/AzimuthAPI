@@ -4,8 +4,41 @@ import os
 import json
 import sys
 import psutil
+from datetime import datetime
+import logging
+from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
+
+def setup_logger(ip_address):
+    """Setup a logger for the current request"""
+    # Create logs directory if it doesn't exist
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+    
+    # Create a unique log filename with IP and timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_filename = f"logs/api_{ip_address}_{timestamp}.log"
+    
+    # Create a new logger
+    logger = logging.getLogger(f'request_{ip_address}')
+    logger.setLevel(logging.DEBUG)
+    
+    # Remove any existing handlers
+    logger.handlers = []
+    
+    # Create file handler
+    file_handler = RotatingFileHandler(log_filename, maxBytes=1024*1024, backupCount=5)
+    file_handler.setLevel(logging.DEBUG)
+    
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    logger.addHandler(file_handler)
+    
+    return logger
 
 def should_filter_line(line):
     # List of patterns to filter out
@@ -34,7 +67,7 @@ def check_system_resources():
     print(f"DEBUG: Current CPU usage: {cpu_percent}%")
     print(f"DEBUG: Current memory usage: {memory_percent}%")
     
-    if cpu_percent > 20 or memory_percent > 20:
+    if cpu_percent > 75 or memory_percent > 75:
         return False, {
             'error': 'System is currently under heavy load. Please try again later.',
             'cpu_usage': cpu_percent,
@@ -46,32 +79,29 @@ def check_system_resources():
     }
 
 # Stream progress updates, including real-time script output
-def progress_stream_error(resource_info):
+def progress_stream_error(resource_info, logger):
     try:
-        # Step 1: Notify file upload success
-        yield f"data: {json.dumps({'message': f'System is under heavy load (CPU: {resource_info["cpu_usage"]}%, Memory: {resource_info["memory_usage"]}%). Please try again later.'})}\n\n"
-        print("DEBUG: File successfully uploaded")
-        sys.stdout.flush()
+        message = f'System is under heavy load (CPU: {resource_info["cpu_usage"]}%, Memory: {resource_info["memory_usage"]}%). Please try again later.'
+        yield f"data: {json.dumps({'message': message})}\n\n"
+        logger.error(message)
 
     except Exception as e:
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        print(f"DEBUG: Exception occurred: {e}")
-        sys.stdout.flush()
+        error_message = str(e)
+        yield f"data: {json.dumps({'error': error_message})}\n\n"
+        logger.error(f"Exception occurred: {error_message}")
 
 # Stream progress updates, including real-time script output
-def progress_stream(input_file, output_file):
+def progress_stream(input_file, output_file, logger):
     try:
         # Step 1: Notify file upload success
         yield f"data: {json.dumps({'message': 'File successfully uploaded'})}\n\n"
-        print("DEBUG: File successfully uploaded")
-        sys.stdout.flush()
+        logger.info("File successfully uploaded")
 
         # Step 2: Run the R script from the specified directory
         current_user = os.getenv("USER") or os.getenv("USERNAME")
         script_directory = f"/home/{current_user}/PanAzimuthWebAPI/"
         r_command = f"Rscript ANNotate_R.R {input_file}"
-        print(f"DEBUG: Running command: {r_command} in directory: {script_directory}")
-        sys.stdout.flush()
+        logger.info(f"Running command: {r_command} in directory: {script_directory}")
 
         # Use Popen to stream output line by line
         process = subprocess.Popen(
@@ -87,82 +117,93 @@ def progress_stream(input_file, output_file):
         for line in process.stdout:
             if not should_filter_line(line.strip()):
                 yield f"data: {json.dumps({'output': line.strip()})}\n\n"
-                print(f"DEBUG: {line.strip()}")  # Debug log for stdout
-                sys.stdout.flush()
+                logger.info(line.strip())
 
         # Stream the script's stderr
         for line in process.stderr:
             if not should_filter_line(line.strip()):
                 yield f"data: {json.dumps({'error': line.strip()})}\n\n"
-                print(f"DEBUG: STDERR: {line.strip()}")  # Debug log for stderr
-                sys.stdout.flush()
+                logger.error(f"STDERR: {line.strip()}")
 
         process.wait()  # Wait for process to complete
         if process.returncode != 0:
-            yield f"data: {json.dumps({'error': f'R script failed with exit code {process.returncode}'})}\n\n"
-            print(f"DEBUG: R script failed with exit code {process.returncode}")
-            sys.stdout.flush()
+            error_message = f'R script failed with exit code {process.returncode}'
+            yield f"data: {json.dumps({'error': error_message})}\n\n"
+            logger.error(error_message)
             return
 
         # Notify script execution success
         yield f"data: {json.dumps({'message': 'R script finished successfully'})}\n\n"
-        print("DEBUG: R script finished successfully")
-        sys.stdout.flush()
+        logger.info("R script finished successfully")
 
         # Step 3: Check for output file
         if not os.path.exists(output_file):
-            yield f"data: {json.dumps({'error': 'Output file not generated'})}\n\n"
-            print("DEBUG: Output file not generated")
-            sys.stdout.flush()
+            error_message = 'Output file not generated'
+            yield f"data: {json.dumps({'error': error_message})}\n\n"
+            logger.error(error_message)
             return
 
         # Notify output file is ready
         yield f"data: {json.dumps({'message': 'Output file ready for download'})}\n\n"
-        print("DEBUG: Output file ready for download")
-        sys.stdout.flush()
+        logger.info("Output file ready for download")
 
     except Exception as e:
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        print(f"DEBUG: Exception occurred: {e}")
-        sys.stdout.flush()
+        error_message = str(e)
+        yield f"data: {json.dumps({'error': error_message})}\n\n"
+        logger.error(f"Exception occurred: {error_message}")
 
 # Main route to handle RDS upload and processing
 @app.route('/process_rds', methods=['POST'])
 def process_rds():
+    # Get client IP address
+    ip_address = request.remote_addr
+    
+    # Setup logger for this request
+    logger = setup_logger(ip_address)
+    logger.info(f"New request from IP: {ip_address}")
+    
     # Check system resources first
     resources_ok, resource_info = check_system_resources()
     if not resources_ok:
-        print(f"DEBUG: FAIL")
-        return Response(progress_stream_error(resource_info), content_type='text/event-stream')
+        logger.warning(f"System resources check failed: CPU {resource_info['cpu_usage']}%, Memory {resource_info['memory_usage']}%")
+        return Response(progress_stream_error(resource_info, logger), content_type='text/event-stream')
 
     if 'file' not in request.files:
+        logger.error("No file part in request")
         return Response("No file part in request", status=400)
 
     file = request.files['file']
     if file.filename == '':
+        logger.error("No selected file")
         return Response("No selected file", status=400)
 
     # Save the uploaded RDS file
     input_file = f"/tmp/{file.filename}"
     output_file = input_file.replace(".rds", "_ANN.rds")
-    print(f"DEBUG: Saving file to: {input_file}")
+    logger.info(f"Saving file to: {input_file}")
     file.save(input_file)
 
     try:
         # Stream progress updates
-        return Response(progress_stream(input_file, output_file), content_type='text/event-stream')
+        return Response(progress_stream(input_file, output_file, logger), content_type='text/event-stream')
     except Exception as e:
-        print(f"DEBUG: Error during processing: {e}")
+        logger.error(f"Error during processing: {e}")
         return Response(json.dumps({'error': str(e)}), content_type='application/json', status=500)
 
 # Route to download the output file
 @app.route('/download_output', methods=['GET'])
 def download_output():
+    # Get client IP address and setup logger
+    ip_address = request.remote_addr
+    logger = setup_logger(ip_address)
+    logger.info(f"Download request from IP: {ip_address}")
+    
     output_file = request.args.get('output_file')
     if not output_file or not os.path.exists(output_file):
+        logger.error(f"Output file not found: {output_file}")
         return Response("Output file not found", status=404)
     
-    print(f"DEBUG: Returning output file: {output_file}")
+    logger.info(f"Returning output file: {output_file}")
     return send_file(output_file, as_attachment=True)
 
 if __name__ == '__main__':
