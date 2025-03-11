@@ -929,7 +929,12 @@ annotate_R <- function(){
   # in this API case we know the object has an RNA assay with counts and data layers
   keto_object=TRUE
   if (keto_object) {
-    annotated_obj[["RNA"]]$data <- Matrix(0, nrow=nrow(annotated_obj[["RNA"]]$data),ncol=ncol(annotated_obj[["RNA"]]$data))
+    if ("data" %in% names(annotated_obj[["RNA"]]@layers)){
+      annotated_obj[["RNA"]]$data <- Matrix(0, nrow=nrow(annotated_obj[["RNA"]]$data),ncol=ncol(annotated_obj[["RNA"]]$data))
+    }
+    if ("counts" %in% names(annotated_obj[["RNA"]]@layers)){
+      annotated_obj[["RNA"]]$counts <- Matrix(0, nrow=nrow(annotated_obj[["RNA"]]$counts),ncol=ncol(annotated_obj[["RNA"]]$counts))
+    }
     if ("ANNshallow_embeddings" %in% names(annotated_obj@reductions)){
       annotated_obj[["ANNshallow_embeddings"]] <- NULL
     }
