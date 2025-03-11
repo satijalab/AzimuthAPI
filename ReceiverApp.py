@@ -7,6 +7,24 @@ import psutil
 
 app = Flask(__name__)
 
+def should_filter_line(line):
+    # List of patterns to filter out
+    filter_patterns = [
+        "Traceback (most recent call last):",
+        "File \"/home/ec2-user/miniconda3/envs/AzimuthNN_min/lib/python3.12/site-packages/tensorflow/python/pywrap_tensorflow.py\"",
+        "import ssl",
+        "File \"/home/ec2-user/R/x86_64-pc-linux-gnu-library/4.4/reticulate/python/rpytools/loader.py\"",
+        "_find_and_load_hook",
+        "return _run_hook",
+        "module = hook()",
+        "_find_and_load(name, import_)",
+        "ImportError: /lib64/libcrypto.so.3: version `OPENSSL_3.3.0' not found",
+        "Warning: Failed to load ssl module. Continuing without ssl support.",
+        "^^^^^^"
+    ]
+    
+    return any(pattern in line for pattern in filter_patterns)
+
 def check_system_resources():
     cpu_percent = psutil.cpu_percent(interval=1)
     memory_percent = psutil.virtual_memory().percent
@@ -52,15 +70,17 @@ def progress_stream(input_file, output_file):
 
         # Stream the script's stdout
         for line in process.stdout:
-            yield f"data: {json.dumps({'output': line.strip()})}\n\n"
-            print(f"DEBUG: {line.strip()}")  # Debug log for stdout
-            sys.stdout.flush()
+            if not should_filter_line(line.strip()):
+                yield f"data: {json.dumps({'output': line.strip()})}\n\n"
+                print(f"DEBUG: {line.strip()}")  # Debug log for stdout
+                sys.stdout.flush()
 
         # Stream the script's stderr
         for line in process.stderr:
-            yield f"data: {json.dumps({'error': line.strip()})}\n\n"
-            print(f"DEBUG: STDERR: {line.strip()}")  # Debug log for stderr
-            sys.stdout.flush()
+            if not should_filter_line(line.strip()):
+                yield f"data: {json.dumps({'error': line.strip()})}\n\n"
+                print(f"DEBUG: STDERR: {line.strip()}")  # Debug log for stderr
+                sys.stdout.flush()
 
         process.wait()  # Wait for process to complete
         if process.returncode != 0:
