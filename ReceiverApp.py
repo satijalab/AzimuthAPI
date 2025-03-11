@@ -3,8 +3,27 @@ import subprocess
 import os
 import json
 import sys
+import psutil
 
 app = Flask(__name__)
+
+def check_system_resources():
+    cpu_percent = psutil.cpu_percent(interval=1)
+    memory_percent = psutil.virtual_memory().percent
+    
+    print(f"DEBUG: Current CPU usage: {cpu_percent}%")
+    print(f"DEBUG: Current memory usage: {memory_percent}%")
+    
+    if cpu_percent > 75 or memory_percent > 75:
+        return False, {
+            'error': 'System is currently under heavy load. Please try again later.',
+            'cpu_usage': cpu_percent,
+            'memory_usage': memory_percent
+        }
+    return True, {
+        'cpu_usage': cpu_percent,
+        'memory_usage': memory_percent
+    }
 
 # Stream progress updates, including real-time script output
 def progress_stream(input_file, output_file):
@@ -75,6 +94,11 @@ def progress_stream(input_file, output_file):
 # Main route to handle RDS upload and processing
 @app.route('/process_rds', methods=['POST'])
 def process_rds():
+    # Check system resources first
+    resources_ok, resource_info = check_system_resources()
+    if not resources_ok:
+        return Response(json.dumps(resource_info), content_type='application/json', status=503)
+
     if 'file' not in request.files:
         return Response("No file part in request", status=400)
 
@@ -98,6 +122,11 @@ def process_rds():
 # Route to download the output file
 @app.route('/download_output', methods=['GET'])
 def download_output():
+    # Check system resources first
+    resources_ok, resource_info = check_system_resources()
+    if not resources_ok:
+        return Response(json.dumps(resource_info), content_type='application/json', status=503)
+
     output_file = request.args.get('output_file')
     if not output_file or not os.path.exists(output_file):
         return Response("Output file not found", status=404)

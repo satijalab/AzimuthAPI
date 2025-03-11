@@ -1,6 +1,8 @@
 require('httr')
 require('jsonlite')
 require('curl')
+require('Rcurl')
+
 library(Seurat)
 # Check Seurat version
 if (!requireNamespace("Seurat", quietly = TRUE)) {
