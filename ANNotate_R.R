@@ -88,13 +88,9 @@ setup_conda_env <- function(
   )
   env_name <- yml_data$name 
   
-  env_check_command <- sprintf('%s env list | grep "%s"', conda_path, env_name)
-  env_check <- tryCatch(
-    system(env_check_command, intern = TRUE),
-    error = function(e) character(0)
-  )
+  env_check <- env_name %in% reticulate::conda_list()$name
   
-  if (force_create && length(env_check) > 0) {
+  if (force_create && env_check) {
     message(sprintf(
       "Conda environment '%s' exists, but force_create is TRUE. "
       "Deleting it first...",
@@ -102,11 +98,11 @@ setup_conda_env <- function(
       ))
     system2(conda_path, c("env", "remove", "--name", env_name, "--yes"))
     message(sprintf("Environment '%s' deleted successfully.", env_name))
-    env_check <- character(0) 
+    env_check <- FALSE
   }
   
   
-  if (length(env_check) == 0) {
+  if (!env_check) {
            
     message(sprintf(
       "Creating conda environment '%s' from '%s'...", 
