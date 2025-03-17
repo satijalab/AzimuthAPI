@@ -64,13 +64,13 @@ library(reticulate)
 #### create conda env and install dependencies
 setup_conda_env <- function(
   yml_file, 
-  requirements_file, 
-  conda_path=NULL, 
-  force_create=FALSE,
-  tensorflow_gpu="tensorflow[and-cuda]==2.17",
-  tensorflow_cpu="tensorflow-cpu==2.17.0"
-  ) {
-  
+  requirements_file = NULL, 
+  conda_path = NULL, 
+  force_create = FALSE,
+  tensorflow_gpu = "tensorflow[and-cuda]==2.17",
+  tensorflow_cpu = "tensorflow-cpu==2.17.0"
+) {
+  # Validate conda installation
   if (is.null(conda_path)) {
     conda_path <- reticulate::conda_binary()
   }
@@ -78,188 +78,137 @@ setup_conda_env <- function(
     stop("Conda not found. Please install conda or miniconda and try again.")
   }
   
+  # Parse and validate YAML environment file
   library(yaml)
   if (!file.exists(yml_file)) {
     stop(sprintf("YML file does not exist at the path: %s", yml_file))
   }
   yml_data <- tryCatch(
     yaml::read_yaml(yml_file),
-    error = function(e) stop(sprintf("Error reading YAML file: %s", e$message))
+    error = function(e) {
+      stop(sprintf("Error reading YAML file: %s", e$message))
+    }
   )
-  env_name <- yml_data$name 
+  env_name <- yml_data$name
   
-  env_check <- env_name %in% reticulate::conda_list()$name
+  # Check if environment exists
+  env_exists <- env_name %in% reticulate::conda_list()$name
   
-  if (force_create && env_check) {
+  # Handle force_create flag
+  if (force_create && env_exists) {
     message(sprintf(
-      "Conda environment '%s' exists, but force_create is TRUE. "
-      "Deleting it first...",
+      "Conda environment '%s' exists, but force_create is TRUE. Deleting it...",
       env_name
-      ))
+    ))
     system2(conda_path, c("env", "remove", "--name", env_name, "--yes"))
     message(sprintf("Environment '%s' deleted successfully.", env_name))
-    env_check <- FALSE
+    env_exists <- FALSE
   }
   
-  
-  if (!env_check) {
-           
+  # Create environment if it doesn't exist
+  if (!env_exists) {
     message(sprintf(
       "Creating conda environment '%s' from '%s'...", 
       env_name, 
       yml_file
-      ))
-    
-    cmd <- c("env", "create", "-f", yml_file) 
-    system2(conda_path, cmd)
-    
+    ))
+    system2(conda_path, c("env", "create", "-f", yml_file))
     message(sprintf("Environment '%s' created.", env_name))
-    
-    reticulate::use_condaenv(
-      condaenv = env_name, 
-      conda = conda_path, 
-      required = TRUE
-      )
-    message(sprintf("Environment '%s' is now active.", env_name))
-
-    python_binary <- ifelse(
-      .Platform$OS.type == "windows",
-      file.path("Scripts", "python.exe"),
-      "bin/python"
-    )
-    
-    active_env <- reticulate::py_config()$python
-    expected_env <- file.path(
-      dirname(dirname(conda_path)), 
-      "envs", 
-      env_name, 
-      python_binary
-      )
-
-    tryCatch(
-      {
-        if (normalizePath(active_env) != normalizePath(expected_env)) {
-          stop(sprintf(
-            "Error: Reticulate is not connected to the expected conda "
-            "environment properly.\nExpected: %s\nActive: %s",
-            expected_env, 
-            active_env
-          ))
-        }
-        message(sprintf("Reticulate is connected to: %s", active_env))
-      }, 
-      error = function(e) {
-        # This captures errors from normalizePath, not from the comparison
-        warning(sprintf(
-          "Could not verify environment paths due to: %s\n"
-          "Raw paths - Expected: %s, Active: %s", 
-          e$message, expected_env, active_env
-        ))
-      }
-    )
-    
-    if (!is.null(requirements_file) && file.exists(requirements_file)) {
-      message(sprintf("Installing dependencies from %s...", requirements_file))
-      system2(conda_path, c(
-        "run", 
-        "-n", 
-        env_name, 
-        "pip", 
-        "install", 
-        "-r", 
-        requirements_file
-        ))
-      system2(conda_path, c(
-        "run", 
-        "-n", 
-        env_name, 
-        "pip", 
-        "install", 
-        "--upgrade", 
-        "pip"
-        ))
-      system2(conda_path, c(
-        "run", 
-        "-n", 
-        env_name, 
-        "pip", 
-        "install", 
-        "--upgrade", 
-        "keras"
-        ))
-      if (if_gpu()){
-        system2(conda_path, c(
-          "run", 
-          "-n", 
-          env_name, 
-          "pip", 
-          "install", 
-          tensorflow_gpu
-          ))
-      }else{
-        system2(conda_path, c(
-          "run", 
-          "-n", 
-          env_name, 
-          "pip", 
-          "install", 
-          tensorflow_cpu
-          ))
-      }
-      
-      message("All dependencies installed through pip.")
-    } else {
-      message("Provide the correct requirements file.")
-    }
-    
-    print(reticulate::py_config())
-  } else {
-    reticulate::use_condaenv(
-      condaenv = env_name, 
-      conda = conda_path, 
-      required = TRUE
-      )
-    message(sprintf("Environment '%s' is now active.", env_name))
-    
-    python_binary <- ifelse(
-      .Platform$OS.type == "windows",
-      file.path("Scripts", "python.exe"),
-      "bin/python"
-    )
-    
-    active_env <- reticulate::py_config()$python
-    expected_env <- file.path(
-      dirname(dirname(conda_path)), 
-      "envs", 
-      env_name, 
-      python_binary
-      )
-    
-    tryCatch(
-      {
-        if (normalizePath(active_env) != normalizePath(expected_env)) {
-          stop(sprintf(
-            "Error: Reticulate is not connected to the expected conda "
-            "environment properly.\nExpected: %s\nActive: %s",
-            expected_env, 
-            active_env
-          ))
-        }
-        message(sprintf("Reticulate is connected to: %s", active_env))
-      }, 
-      error = function(e) {
-        # This captures errors from normalizePath, not from the comparison
-        warning(sprintf(
-          "Could not verify environment paths due to: %s\n"
-          "Raw paths - Expected: %s, Active: %s", 
-          e$message, expected_env, active_env
-        ))
-      }
-    )
-    
-    print(reticulate::py_config())
   }
   
+  # Activate the environment
+  message(sprintf("Activating environment '%s'...", env_name))
+  reticulate::use_condaenv(
+    condaenv = env_name,
+    conda = conda_path,
+    required = TRUE
+  )
+  message(sprintf("Environment '%s' is now active.", env_name))
+  
+  # Verify environment connection
+  python_binary <- ifelse(
+    .Platform$OS.type == "windows",
+    file.path("Scripts", "python.exe"),
+    "bin/python"
+  )
+  
+  active_env <- reticulate::py_config()$python
+  expected_env <- file.path(
+    dirname(dirname(conda_path)), 
+    "envs", 
+    env_name, 
+    python_binary
+  )
+  
+  verify_environment <- function() {
+    tryCatch({
+      if (normalizePath(active_env) != normalizePath(expected_env)) {
+        stop(sprintf(
+          paste0(
+            "Error: Reticulate is not connected to the expected conda ",
+            "environment properly.\nExpected: %s\nActive: %s"
+          ),
+          expected_env, 
+          active_env
+        ))
+      }
+      message(sprintf("Reticulate is connected to: %s", active_env))
+    }, error = function(e) {
+      warning(sprintf(
+        paste0(
+          "Could not verify environment paths due to: %s\n",
+          "Raw paths - Expected: %s, Active: %s"
+        ), 
+        e$message, expected_env, active_env
+      ))
+    })
+  }
+  
+  verify_environment()
+  
+  # Install additional requirements if environment was just created
+  if (!env_exists && 
+      !is.null(requirements_file) && 
+      file.exists(requirements_file)) {
+    
+    message(sprintf("Installing dependencies from %s...", requirements_file))
+    
+    # Install requirements file
+    system2(conda_path, c(
+      "run", "-n", env_name, "pip", "install", "-r", requirements_file
+    ))
+    
+    # Upgrade pip
+    system2(conda_path, c(
+      "run", "-n", env_name, "pip", "install", "--upgrade", "pip"
+    ))
+    
+    # Upgrade keras
+    system2(conda_path, c(
+      "run", "-n", env_name, "pip", "install", "--upgrade", "keras"
+    ))
+    
+    # Install appropriate TensorFlow version
+    if (if_gpu()) {
+      message("GPU detected, installing GPU version of TensorFlow...")
+      system2(conda_path, c(
+        "run", "-n", env_name, "pip", "install", tensorflow_gpu
+      ))
+    } else {
+      message("No GPU detected, installing CPU version of TensorFlow...")
+      system2(conda_path, c(
+        "run", "-n", env_name, "pip", "install", tensorflow_cpu
+      ))
+    }
+    
+    message("All dependencies installed through pip.")
+  } else if (!env_exists && 
+             (is.null(requirements_file) || !file.exists(requirements_file))) {
+    message("Requirements file not provided or doesn't exist.")
+  }
+  
+  # Print final Python configuration
+  print(reticulate::py_config())
 }
 
 yml_path <- "utils/env_min.yml" 
