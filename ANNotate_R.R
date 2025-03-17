@@ -289,8 +289,12 @@ library(Matrix)
 
 
 #### python dependencies
-python_module_path <- file.path("/home", Sys.getenv("USER"), "panhumanpy/")
-python_module_src <- file.path("/home", Sys.getenv("USER"), "panhumanpy/src")
+home_dir <- ifelse(.Platform$OS.type == "windows", 
+                   Sys.getenv("USERPROFILE"), 
+                   file.path("/home", Sys.getenv("USER")))
+python_module_path <- file.path(home_dir, "panhumanpy/")
+python_module_src <- file.path(home_dir, "panhumanpy/src")
+
 py_run_string(paste(
   "import sys; sys.path.append('", python_module_src, "')", 
   sep = ""
