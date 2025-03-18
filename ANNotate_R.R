@@ -506,3 +506,223 @@ ANNotate <- function(
 }
 
 
+
+########################################################################
+########## functions for command-line usage ############################
+########################################################################
+########################################################################
+
+
+
+read_seurat_object <- function(filepath, assay_name = "RNA") {
+  # Check if file exists
+  if (!file.exists(filepath)) {
+    stop(paste("File does not exist at the specified path:", filepath))
+  }
+  
+  # Check file extension
+  if (!grepl("\\.rds$", filepath, ignore.case = TRUE)) {
+    warning("File does not have .rds extension. Attempting to read anyway.")
+  }
+  
+  # Load the RDS file
+  tryCatch({
+    seurat_obj <- readRDS(filepath)
+  }, error = function(e) {
+    stop(paste("Error reading RDS file:", e$message))
+  })
+  
+  # Check if it's a Seurat object
+  if (!inherits(seurat_obj, "Seurat")) {
+    stop("The file does not contain a Seurat object.")
+  }
+  
+  # Check Seurat version
+  seurat_version <- packageVersion("Seurat")
+  if (seurat_version < "4.4.0") {
+    warning(paste(
+      "Current Seurat version:", seurat_version, 
+      "is below 4.4.0. Some functionality may "
+      "not work as expected."
+      ))
+  }
+  
+  # Check if specified assay exists
+  if (!assay_name %in% names(seurat_obj@assays)) {
+    available_assays <- paste(names(seurat_obj@assays), collapse = ", ")
+    stop(paste("Assay", assay_name, "not found in the Seurat object.",
+               "Available assays:", available_assays))
+  }
+  
+  # Set default assay
+  DefaultAssay(seurat_obj) <- assay_name
+  
+  return(seurat_obj)
+}
+
+
+
+########################################################################
+
+save_seurat_object <- function(seurat_obj, filepath) {
+  # Check if object is a Seurat object
+  if (!inherits(seurat_obj, "Seurat")) {
+    stop("The object is not a Seurat object.")
+  }
+  
+  # Construct output filepath
+  dir_path <- dirname(filepath)
+  file_name <- basename(filepath)
+  file_name_ann <- sub("\\.rds$", "_ANN.rds", file_name)
+  if (file_name == file_name_ann) {
+    # If no .rds extension was found, add it
+    file_name_ann <- paste0(file_name, "_ANN.rds")
+  }
+  output_path <- file.path(dir_path, file_name_ann)
+  
+  # This is a joke about massively dieting the object
+  # so that we don't redownload expression or embedding data
+  # in this API case we know the object has an RNA assay with counts and
+  # data layers
+  keto_object=TRUE
+  if (keto_object) {
+    if ("RNA" %in% names(seurat_obj@assays)) {
+      # Handle Seurat v5+ and v4 differently
+      if (packageVersion("Seurat") >= "5.0.0") {
+        # For Seurat v5+
+        if ("data" %in% names(seurat_obj[["RNA"]]@layers)) {
+          seurat_obj[
+            ["RNA"]
+            ]$data <- Matrix::Matrix(
+              0, 
+              nrow = nrow(seurat_obj[["RNA"]]$data),
+              ncol = ncol(seurat_obj[["RNA"]]$data),
+              sparse = TRUE
+              )
+        }
+        if ("counts" %in% names(seurat_obj[["RNA"]]@layers)) {
+          seurat_obj[
+            ["RNA"]
+            ]$counts <- Matrix::Matrix(
+              0, 
+              nrow = nrow(seurat_obj[["RNA"]]$counts),
+              ncol = ncol(seurat_obj[["RNA"]]$counts),
+              sparse = TRUE
+              )
+        }
+      } else {
+        # For Seurat v4
+        if ("data" %in% slotNames(seurat_obj[["RNA"]])) {
+          slot(
+            seurat_obj[["RNA"]], 
+            "data"
+            ) <- Matrix::Matrix(
+              0, 
+              nrow = nrow(slot(seurat_obj[["RNA"]], "data")),
+              ncol = ncol(slot(seurat_obj[["RNA"]], "data")),
+              sparse = TRUE
+            )
+        }
+        if ("counts" %in% slotNames(seurat_obj[["RNA"]])) {
+          slot(
+            seurat_obj[["RNA"]], 
+            "counts"
+            ) <- Matrix::Matrix(
+              0, 
+              nrow = nrow(slot(seurat_obj[["RNA"]], "counts")),
+              ncol = ncol(slot(seurat_obj[["RNA"]], "counts")),
+              sparse = TRUE
+            )
+        }
+      }
+    }
+    
+    # Remove ANNshallow_embeddings
+    if ("azimuth_embed" %in% names(seurat_obj@reductions)) {
+      seurat_obj[["azimuth_embed"]] <- NULL
+    }
+  }
+  
+  # Save the object
+  message("Saving annotated object to ", output_path)
+  saveRDS(seurat_obj, file = output_path)
+  
+  # Return the path invisibly
+  invisible(output_path)
+}
+
+
+########################################################################
+############################ main executable function ##################
+
+ANNotate_R <- function() {
+  # Parse command line arguments
+  args <- parse_annotate_args()
+  formatted_args <- format_annotate_args(args)
+  
+  # Check if running interactively or from command line
+  is_interactive <- interactive()
+  
+  if (!is_interactive) {
+    message("ANNotate_R is being executed from the command line...")
+  } else {
+    message("ANNotate_R is being run interactively.")
+  }
+  
+  # Extract filepath and read the Seurat object
+  filepath <- formatted_args$filepath
+  assay_name <- formatted_args$assay
+  
+  message(paste("Reading Seurat object from", filepath))
+  query_obj <- read_seurat_object(filepath, assay_name)
+  
+  # Filter arguments to only include those expected by ANNotate
+  # Get ANNotate function arguments
+  annotate_args <- formals(ANNotate)
+  annotate_arg_names <- names(annotate_args)
+  
+  # Filter formatted_args to only include arguments that ANNotate expects
+  args_for_annotate <- formatted_args[names(formatted_args) %in% annotate_arg_names]
+  
+  # Add query_obj to the arguments
+  args_for_annotate$query_obj <- query_obj
+  
+  # Print the function call for debugging
+  if (formatted_args$verbose) {
+    message("Calling ANNotate function with the following arguments:")
+    annotate_call <- paste0("ANNotate(", 
+                           paste(sprintf("%s = %s", 
+                                        names(args_for_annotate), 
+                                        sapply(args_for_annotate, function(x) {
+                                          if (is.character(x)) {
+                                            return(paste0("'", x, "'"))
+                                          } else if (is.null(x)) {
+                                            return("NULL")
+                                          } else {
+                                            return(as.character(x))
+                                          }
+                                        })), 
+                                 collapse = ", "), 
+                           ")")
+    message(annotate_call)
+  }
+  
+  # Extract filepath from arguments
+  filepath <- formatted_args$filepath
+  
+  # Call ANNotate function with the filtered arguments
+  message("Running ANNotate function...")
+  annotated_obj <- do.call(ANNotate, args_for_annotate)
+  
+  # Save the annotated object
+  save_seurat_object(seurat_obj = annotated_obj, filepath = filepath)
+  
+  # Return the annotated object
+  message("ANNotate_R completed successfully.")
+  return(annotated_obj)
+}
+
+# Execute the main function if run from command line
+if (!interactive()) {
+  ANNotate_R()
+}
