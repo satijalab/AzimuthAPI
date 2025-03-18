@@ -100,6 +100,7 @@ def progress_stream(input_file, output_file, logger):
         # Step 2: Run the R script from the specified directory
         current_user = os.getenv("USER") or os.getenv("USERNAME")
         script_directory = f"/home/{current_user}/PanAzimuthWebAPI/"
+        # This will only work if the package is installed in this particular direcoty.
         r_command = f"Rscript ANNotate_R.R {input_file}"
         logger.info(f"Running command: {r_command} in directory: {script_directory}")
 
