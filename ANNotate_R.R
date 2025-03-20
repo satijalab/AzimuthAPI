@@ -41,8 +41,8 @@ if_gpu <- function() {
 if (!requireNamespace("reticulate", quietly = TRUE) || 
     packageVersion("reticulate") < "1.40.0") {
   message(
-    "Installing or updating reticulate to version 1.40.0 "
-    "alongwith dependencies Rcpp and RcppTOML..."
+    paste0("Installing or updating reticulate to version 1.40.0 ",
+            "alongwith dependencies Rcpp and RcppTOML...")
     )
   install.packages("Rcpp")
   install.packages("RcppTOML")
@@ -51,8 +51,8 @@ if (!requireNamespace("reticulate", quietly = TRUE) ||
   if (!requireNamespace("reticulate", quietly = TRUE) || 
       packageVersion("reticulate") < "1.40.0") {
     stop(
-      "Failed to install or update reticulate to "
-      "version 1.40.0. Please resolve this issue externally."
+      paste0("Failed to install or update reticulate to ",
+      "version 1.40.0. Please resolve this issue externally.")
       )
   } else {
     message("reticulate successfully updated to version 1.40.0.")
@@ -306,7 +306,7 @@ read_obj_min <- function(query_obj, feature_names_col, assay_default='RNA') {
     } else {
       stop(paste(
         feature_names_col, 
-        "not found as a column in the df returned by "
+        "not found as a column in the df returned by ",
         "object[[",assay_default,"]][[]]"
         ))
     }
@@ -340,7 +340,7 @@ package_obj <- function(
       
       if (nrow(em_matrix) != length(Cells(query_obj))) {
         stop(paste(
-          "Dimension mismatch:", em_name, " does not have as many "
+          "Dimension mismatch:", em_name, " does not have as many ",
           "cells as the query obj."
           ))
       }
@@ -353,7 +353,7 @@ package_obj <- function(
         assay = DefaultAssay(query_obj)
         )
       
-      query_obj[[paste0(em_name)]] <- dimreduc_obj
+      query_obj[[em_name]] <- dimreduc_obj
     }
   }
   
@@ -364,7 +364,7 @@ package_obj <- function(
       
       if (nrow(em_matrix) != length(Cells(query_obj))) {
         stop(paste(
-          "Dimension mismatch:", em_name, " does not "
+          "Dimension mismatch:", em_name, " does not ",
           "have as many cells as the query obj."
           ))
       }
@@ -377,7 +377,7 @@ package_obj <- function(
         assay = DefaultAssay(query_obj)
         )
       
-      query_obj[[paste0("umapANN", em_name)]] <- dimreduc_obj
+      query_obj[[em_name]] <- dimreduc_obj
     }
   }
   
@@ -392,7 +392,7 @@ package_obj <- function(
 
 PrepLabel <- function(
   object, 
-  label_id = 'final_level_label', 
+  label_id = 'final_level_labels', 
   newid = 'PrepLabel', 
   cutid = 'Other', 
   cutoff=10
@@ -438,6 +438,7 @@ ANNotate <- function(
   
   # Convert integers
   eval_batch_size <- as.integer(eval_batch_size)
+  norm_check_batch_size <- as.integer(norm_check_batch_size)
   n_neighbors <- as.integer(n_neighbors)
   n_components <- as.integer(n_components)
   umap_seed <- as.integer(umap_seed)
@@ -491,7 +492,7 @@ ANNotate <- function(
   if (process_obj){
     annotated_obj <- PrepLabel(
       annotated_obj,
-      label_id = 'final_level_label',
+      label_id = 'final_level_labels',
       cutoff = min(cutoff_abs, cutoff_frac*ncol(annotated_obj)),
       cutid = 'Other',
       newid = 'azimuth_label'
@@ -542,7 +543,7 @@ read_seurat_object <- function(filepath, assay_name = "RNA") {
   if (seurat_version < "4.4.0") {
     warning(paste(
       "Current Seurat version:", seurat_version, 
-      "is below 4.4.0. Some functionality may "
+      "is below 4.4.0. Some functionality may ",
       "not work as expected."
       ))
   }
@@ -587,53 +588,66 @@ save_seurat_object <- function(seurat_obj, filepath) {
   keto_object=TRUE
   if (keto_object) {
     if ("RNA" %in% names(seurat_obj@assays)) {
-      # Handle Seurat v5+ and v4 differently
-      if (packageVersion("Seurat") >= "5.0.0") {
+      # Get Seurat version
+      seurat_version <- packageVersion("Seurat")
+      
+      # Use version-specific approach
+      if (seurat_version >= "5.0.0") {
         # For Seurat v5+
-        if ("data" %in% names(seurat_obj[["RNA"]]@layers)) {
-          seurat_obj[
-            ["RNA"]
-            ]$data <- Matrix::Matrix(
+        tryCatch({
+          # Check what layers are available
+          available_layers <- Layers(seurat_obj[["RNA"]])
+          
+          # Replace data layer if it exists
+          if ("data" %in% available_layers) {
+            seurat_obj[["RNA"]]$data <- Matrix::Matrix(
               0, 
               nrow = nrow(seurat_obj[["RNA"]]$data),
               ncol = ncol(seurat_obj[["RNA"]]$data),
               sparse = TRUE
-              )
-        }
-        if ("counts" %in% names(seurat_obj[["RNA"]]@layers)) {
-          seurat_obj[
-            ["RNA"]
-            ]$counts <- Matrix::Matrix(
+            )
+          }
+          
+          # Replace counts layer if it exists
+          if ("counts" %in% available_layers) {
+            seurat_obj[["RNA"]]$counts <- Matrix::Matrix(
               0, 
               nrow = nrow(seurat_obj[["RNA"]]$counts),
               ncol = ncol(seurat_obj[["RNA"]]$counts),
               sparse = TRUE
-              )
-        }
+            )
+          }
+        }, error = function(e) {
+          warning("Error while processing Seurat v5 layers: ", e$message)
+        })
       } else {
-        # For Seurat v4
-        if ("data" %in% slotNames(seurat_obj[["RNA"]])) {
-          slot(
-            seurat_obj[["RNA"]], 
-            "data"
-            ) <- Matrix::Matrix(
+        # For Seurat v4 and below
+        tryCatch({
+          # Check what slots are available
+          available_slots <- slotNames(seurat_obj[["RNA"]])
+          
+          # Replace data slot if it exists
+          if ("data" %in% available_slots) {
+            slot(seurat_obj[["RNA"]], "data") <- Matrix::Matrix(
               0, 
               nrow = nrow(slot(seurat_obj[["RNA"]], "data")),
               ncol = ncol(slot(seurat_obj[["RNA"]], "data")),
               sparse = TRUE
             )
-        }
-        if ("counts" %in% slotNames(seurat_obj[["RNA"]])) {
-          slot(
-            seurat_obj[["RNA"]], 
-            "counts"
-            ) <- Matrix::Matrix(
+          }
+          
+          # Replace counts slot if it exists
+          if ("counts" %in% available_slots) {
+            slot(seurat_obj[["RNA"]], "counts") <- Matrix::Matrix(
               0, 
               nrow = nrow(slot(seurat_obj[["RNA"]], "counts")),
               ncol = ncol(slot(seurat_obj[["RNA"]], "counts")),
               sparse = TRUE
             )
-        }
+          }
+        }, error = function(e) {
+          warning("Error while processing Seurat v4 slots: ", e$message)
+        })
       }
     }
     
@@ -649,6 +663,235 @@ save_seurat_object <- function(seurat_obj, filepath) {
   
   # Return the path invisibly
   invisible(output_path)
+}
+
+########################################################################
+
+parse_annotate_args <- function() {
+  # Check if argparse is available
+  if (!requireNamespace("argparse", quietly = TRUE)) {
+    install.packages("argparse")
+    library(argparse)
+  } else {
+    library(argparse)
+  }
+  
+  message("Parsing command line arguments...")
+  
+  # Create argument parser
+  parser <- ArgumentParser(description = "Command line interface for ANNotate function")
+  
+  # Required arguments
+  parser$add_argument(
+    "filepath",
+    help = "Path to the Seurat object RDS file",
+    type = "character"
+  )
+  
+  # Optional arguments 
+  parser$add_argument(
+    "-f", "--feature_names_col",
+    default = NULL,
+    help = "Column name containing feature names (default: NULL)",
+    type = "character"
+  )
+
+  parser$add_argument(
+    "-p", "--annotation_pipeline",
+    default = "supervised",
+    help = "Annotation pipeline to use (default: 'supervised')",
+    type = "character"
+  )  
+  
+  parser$add_argument(
+    "-ebs", "--eval_batch_size",
+    default = 40960,
+    help = "Batch size for evaluation (default: 40960)",
+    type = "integer"
+  )
+  
+  parser$add_argument(
+    "-no", "--normalization_override",
+    action = "store_true",
+    default = FALSE,
+    help = "Override normalization (default: FALSE)"
+  )
+  
+  parser$add_argument(
+    "-ncb", "--norm_check_batch_size",
+    default = 1000,
+    help = "Batch size for normalization check (default: 1000)",
+    type = "integer"
+  )
+  
+  parser$add_argument(
+    "-om", "--output_mode",
+    default = "minimal",
+    help = "Output mode (default: 'minimal')",
+    type = "character"
+  )
+  
+  parser$add_argument(
+    "-rl", "--refine_labels",
+    action = "store_true",
+    default = TRUE,
+    help = "Refine labels (default: TRUE)"
+  )  
+  
+  parser$add_argument(
+    "-ee", "--extract_embeddings",
+    action = "store_true",
+    default = TRUE,
+    help = "Extract embeddings (default: TRUE)"
+  )
+  
+  parser$add_argument(
+    "-ue", "--umap_embeddings",
+    action = "store_true",
+    default = TRUE,
+    help = "Generate UMAP embeddings (default: TRUE)"
+  )
+  
+  parser$add_argument(
+    "-nn", "--n_neighbors",
+    default = 30,
+    help = "Number of neighbors for UMAP (default: 30)",
+    type = "integer"
+  )
+  
+  parser$add_argument(
+    "-nc", "--n_components",
+    default = 2,
+    help = "Number of components for UMAP (default: 2)",
+    type = "integer"
+  )
+  
+  parser$add_argument(
+    "-m", "--metric",
+    default = "cosine",
+    help = "Distance metric for UMAP (default: 'cosine')",
+    type = "character"
+  )
+  
+  parser$add_argument(
+    "-md", "--min_dist",
+    default = 0.3,
+    help = "Minimum distance for UMAP (default: 0.3)",
+    type = "double"
+  )
+  
+  parser$add_argument(
+    "-ulr", "--umap_lr",
+    default = 1.0,
+    help = "Learning rate for UMAP (default: 1.0)",
+    type = "double"
+  )
+  
+  parser$add_argument(
+    "-us", "--umap_seed",
+    default = 42,
+    help = "Random seed for UMAP (default: 42)",
+    type = "integer"
+  )
+  
+  parser$add_argument(
+    "-sp", "--spread",
+    default = 1.0,
+    help = "Spread parameter for UMAP (default: 1.0)",
+    type = "double"
+  )
+  
+  parser$add_argument(
+    "-v", "--verbose",
+    action = "store_true",
+    default = TRUE,
+    help = "Verbose output (default: TRUE)"
+  )
+  
+  parser$add_argument(
+    "-i", "--init",
+    default = "spectral",
+    help = "Initialization method for UMAP (default: 'spectral')",
+    type = "character"
+  )
+  
+  parser$add_argument(
+    "-po", "--process_obj",
+    action = "store_true",
+    default = TRUE,
+    help = "Process object with PrepLabel (default: TRUE)"
+  )
+  
+  parser$add_argument(
+    "-ca", "--cutoff_abs",
+    default = 5,
+    help = "Absolute cutoff for PrepLabel (default: 5)",
+    type = "integer"
+  )
+  
+  parser$add_argument(
+    "-cf", "--cutoff_frac",
+    default = 0.001,
+    help = "Fractional cutoff for PrepLabel (default: 0.001)",
+    type = "double"
+  )
+  
+  args <- parser$parse_args()
+  
+  return(args)
+}
+
+
+########################################################################
+
+format_annotate_args <- function(args) {
+  message("Formatting arguments for ANNotate function...")
+  
+  # Convert arguments to properly named list for ANNotate
+  formatted_args <- list(
+    # Required arguments
+    filepath = args$filepath,
+    
+    # Optional arguments with parameter names matching ANNotate function
+    feature_names_col = args$feature_names_col,
+    annotation_pipeline = args$annotation_pipeline,
+    eval_batch_size = args$eval_batch_size,
+    normalization_override = args$normalization_override,
+    norm_check_batch_size = args$norm_check_batch_size,
+    output_mode = args$output_mode,
+    refine_labels = args$refine_labels,
+    extract_embeddings = args$extract_embeddings,
+    umap_embeddings = args$umap_embeddings,
+    n_neighbors = args$n_neighbors,
+    n_components = args$n_components,
+    metric = args$metric,
+    min_dist = args$min_dist,
+    umap_lr = args$umap_lr,
+    umap_seed = args$umap_seed,
+    spread = args$spread,
+    verbose = args$verbose,
+    init = args$init,
+    process_obj = args$process_obj,
+    cutoff_abs = args$cutoff_abs,
+    cutoff_frac = args$cutoff_frac    
+    )
+  
+  # Inform about parsed arguments
+  if (args$verbose) {
+    message("Arguments for ANNotate function:")
+    for (name in names(formatted_args)) {
+      value <- formatted_args[[name]]
+      if (is.null(value)) {
+        message(sprintf("  %s: NULL", name))
+      } else if (is.logical(value) || is.numeric(value)) {
+        message(sprintf("  %s: %s", name, value))
+      } else {
+        message(sprintf("  %s: '%s'", name, value))
+      }
+    }
+  }
+  
+  return(formatted_args)
 }
 
 
@@ -671,7 +914,7 @@ ANNotate_R <- function() {
   
   # Extract filepath and read the Seurat object
   filepath <- formatted_args$filepath
-  assay_name <- formatted_args$assay
+  assay_name <- 'RNA'
   
   message(paste("Reading Seurat object from", filepath))
   query_obj <- read_seurat_object(filepath, assay_name)
@@ -686,26 +929,6 @@ ANNotate_R <- function() {
   
   # Add query_obj to the arguments
   args_for_annotate$query_obj <- query_obj
-  
-  # Print the function call for debugging
-  if (formatted_args$verbose) {
-    message("Calling ANNotate function with the following arguments:")
-    annotate_call <- paste0("ANNotate(", 
-                           paste(sprintf("%s = %s", 
-                                        names(args_for_annotate), 
-                                        sapply(args_for_annotate, function(x) {
-                                          if (is.character(x)) {
-                                            return(paste0("'", x, "'"))
-                                          } else if (is.null(x)) {
-                                            return("NULL")
-                                          } else {
-                                            return(as.character(x))
-                                          }
-                                        })), 
-                                 collapse = ", "), 
-                           ")")
-    message(annotate_call)
-  }
   
   # Extract filepath from arguments
   filepath <- formatted_args$filepath
