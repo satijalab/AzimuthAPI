@@ -58,7 +58,7 @@ read_obj_min <- function(query_obj, feature_names_col, assay_default='RNA') {
     } else {
       stop(paste(
         feature_names_col, 
-        "not found as a column in the df returned by "
+        "not found as a column in the df returned by ",
         "object[[",assay_default,"]][[]]"
         ))
     }
@@ -101,7 +101,7 @@ package_obj <- function(
       
       if (nrow(em_matrix) != length(Cells(query_obj))) {
         stop(paste(
-          "Dimension mismatch:", em_name, " does not have as many "
+          "Dimension mismatch:", em_name, " does not have as many ",
           "cells as the query obj."
           ))
       }
@@ -125,7 +125,7 @@ package_obj <- function(
       
       if (nrow(em_matrix) != length(Cells(query_obj))) {
         stop(paste(
-          "Dimension mismatch:", em_name, " does not "
+          "Dimension mismatch:", em_name, " does not ",
           "have as many cells as the query obj."
           ))
       }

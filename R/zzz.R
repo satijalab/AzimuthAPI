@@ -3,8 +3,8 @@
   if (!requireNamespace("reticulate", quietly = TRUE) || 
       packageVersion("reticulate") < "1.40.0") {
     message(
-      "Installing or updating reticulate to version 1.40.0 alongwith "
-      "dependencies Rcpp and RcppTOML..."
+      paste0("Installing or updating reticulate to version 1.40.0 alongwith ",
+      "dependencies Rcpp and RcppTOML...")
       )
     install.packages("Rcpp")
     install.packages("RcppTOML")
@@ -13,8 +13,8 @@
     if (!requireNamespace("reticulate", quietly = TRUE) || 
         packageVersion("reticulate") < "1.40.0") {
       stop(
-        "Failed to install or update reticulate to version 1.40.0. "
-        "Please resolve this issue externally."
+        paste0("Failed to install or update reticulate to version 1.40.0. ",
+        "Please resolve this issue externally.")
         )
     } else {
       message("reticulate successfully updated to version 1.40.0.")
