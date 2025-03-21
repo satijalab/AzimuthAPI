@@ -9,12 +9,17 @@ import logging
 from logging.handlers import RotatingFileHandler
 import requests
 import threading
+from werkzeug.exceptions import HTTPException
+import uuid
 
 app = Flask(__name__)
 
 # Global counter for concurrent requests
 request_counter = 0
 request_lock = threading.Lock()
+# Track which requests are active
+active_requests = {}  # Changed from set to dict to track cleanup status
+active_requests_lock = threading.Lock()
 
 def increment_counter():
     global request_counter
@@ -26,9 +31,63 @@ def increment_counter():
 def decrement_counter():
     global request_counter
     with request_lock:
-        request_counter -= 1
-        current_count = request_counter
+        if request_counter > 0:  # Safety check
+            request_counter -= 1
+            current_count = request_counter
+        else:
+            current_count = 0
     return current_count
+
+def generate_request_id():
+    """Generate a unique request ID"""
+    return str(uuid.uuid4())
+
+def mark_request_active():
+    """Mark the current request as active"""
+    with active_requests_lock:
+        request_id = generate_request_id()
+        ip = request.environ.get('REMOTE_ADDR', 'unknown')
+        active_requests[request_id] = {
+            'ip': ip,
+            'cleaned_up': False,
+            'timestamp': datetime.now()
+        }
+        return request_id
+
+def mark_request_complete(request_id):
+    """Mark the current request as complete and decrement counter if needed"""
+    with active_requests_lock:
+        if request_id in active_requests and not active_requests[request_id]['cleaned_up']:
+            active_requests[request_id]['cleaned_up'] = True
+            ip = active_requests[request_id]['ip']
+            decrement_counter()
+            print(f"Request {request_id} from {ip} cleaned up. Current requests: {request_counter}")
+
+def cleanup_old_requests():
+    """Clean up the tracking dict periodically"""
+    with active_requests_lock:
+        now = datetime.now()
+        for request_id in list(active_requests.keys()):
+            if active_requests[request_id]['cleaned_up'] or \
+               (now - active_requests[request_id]['timestamp']).total_seconds() > 3600:  # 1 hour timeout
+                del active_requests[request_id]
+
+@app.teardown_request
+def cleanup_request(error=None):
+    """Only clean up if this is a non-streaming request"""
+    if not request.environ.get('wsgi.multithread', False):
+        # This is a regular (non-streaming) request
+        request_id = request.environ.get('request_id')
+        if request_id:
+            mark_request_complete(request_id)
+            cleanup_old_requests()
+
+@app.before_request
+def track_request():
+    """Track new requests"""
+    if request.endpoint == 'process_rds':
+        request_id = mark_request_active()
+        request.environ['request_id'] = request_id
 
 def setup_logger(ip_address):
     """Setup a logger for the current request"""
@@ -212,6 +271,9 @@ def get_location_info(ip_address):
 # Main route to handle RDS upload and processing
 @app.route('/process_rds', methods=['POST'])
 def process_rds():
+    # Get the request ID set by before_request
+    request_id = request.environ.get('request_id')
+    
     # Increment request counter and get current count
     current_requests = increment_counter()
     
@@ -235,18 +297,18 @@ def process_rds():
         resources_ok, resource_info = check_system_resources()
         if not resources_ok:
             logger.warning(f"System resources check failed: CPU {resource_info['cpu_usage']}%, Memory {resource_info['memory_usage']}%")
-            decrement_counter()  # Decrement counter before error return
+            mark_request_complete(request_id)
             return Response(progress_stream_error(resource_info, logger), content_type='text/event-stream')
 
         if 'file' not in request.files:
             logger.error("No file part in request")
-            decrement_counter()  # Decrement counter before error return
+            mark_request_complete(request_id)
             return Response("No file part in request", status=400)
 
         file = request.files['file']
         if file.filename == '':
             logger.error("No selected file")
-            decrement_counter()  # Decrement counter before error return
+            mark_request_complete(request_id)
             return Response("No selected file", status=400)
 
         # Save the uploaded RDS file
@@ -259,16 +321,22 @@ def process_rds():
             try:
                 for chunk in progress_stream(input_file, output_file, logger):
                     yield chunk
+            except GeneratorExit:  # This is raised when the client disconnects
+                print(f"Client disconnected from {ip_address}")
+                logger.warning("Client disconnected during streaming")
+                mark_request_complete(request_id)
+                raise
             finally:
-                remaining_requests = decrement_counter()
-                print(f"Request completed. Remaining concurrent requests: {remaining_requests}")
-                logger.info(f"Request completed. Remaining concurrent requests: {remaining_requests}")
+                mark_request_complete(request_id)
+                remaining_requests = request_counter
+                print(f"Request completed/terminated. Current concurrent requests: {remaining_requests}")
+                logger.info(f"Request completed/terminated. Current concurrent requests: {remaining_requests}")
 
         return Response(generate(), content_type='text/event-stream')
         
     except Exception as e:
         logger.error(f"Error during processing: {e}")
-        decrement_counter()  # Decrement counter before error return
+        mark_request_complete(request_id)
         return Response(json.dumps({'error': str(e)}), content_type='application/json', status=500)
 
 # Route to download the output file
