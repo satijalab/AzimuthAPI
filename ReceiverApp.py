@@ -8,8 +8,27 @@ from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 import requests
+import threading
 
 app = Flask(__name__)
+
+# Global counter for concurrent requests
+request_counter = 0
+request_lock = threading.Lock()
+
+def increment_counter():
+    global request_counter
+    with request_lock:
+        request_counter += 1
+        current_count = request_counter
+    return current_count
+
+def decrement_counter():
+    global request_counter
+    with request_lock:
+        request_counter -= 1
+        current_count = request_counter
+    return current_count
 
 def setup_logger(ip_address):
     """Setup a logger for the current request"""
@@ -192,44 +211,62 @@ def get_location_info(ip_address):
 # Main route to handle RDS upload and processing
 @app.route('/process_rds', methods=['POST'])
 def process_rds():
-    # Get client IP address
-    ip_address = request.remote_addr
+    # Increment request counter and get current count
+    current_requests = increment_counter()
     
-    # Get location information
-    location = get_location_info(ip_address)
-    print(f"New API call from IP: {ip_address}")
-    print(f"Location: {location['city']}, {location['region']}, {location['country']}")
-    
-    # Setup logger for this request
-    logger = setup_logger(ip_address)
-    logger.info(f"New request from IP: {ip_address} ({location['city']}, {location['region']}, {location['country']})")
-    
-    # Check system resources first
-    resources_ok, resource_info = check_system_resources()
-    if not resources_ok:
-        logger.warning(f"System resources check failed: CPU {resource_info['cpu_usage']}%, Memory {resource_info['memory_usage']}%")
-        return Response(progress_stream_error(resource_info, logger), content_type='text/event-stream')
-
-    if 'file' not in request.files:
-        logger.error("No file part in request")
-        return Response("No file part in request", status=400)
-
-    file = request.files['file']
-    if file.filename == '':
-        logger.error("No selected file")
-        return Response("No selected file", status=400)
-
-    # Save the uploaded RDS file
-    input_file = f"/tmp/{file.filename}"
-    output_file = input_file.replace(".rds", "_ANN.rds")
-    logger.info(f"Saving file to: {input_file}")
-    file.save(input_file)
-
     try:
-        # Stream progress updates
-        return Response(progress_stream(input_file, output_file, logger), content_type='text/event-stream')
+        # Get client IP address
+        ip_address = request.remote_addr
+        
+        # Get location information
+        location = get_location_info(ip_address)
+        print(f"New API call from IP: {ip_address}")
+        print(f"Location: {location['city']}, {location['region']}, {location['country']}")
+        print(f"Current concurrent requests: {current_requests}")
+        
+        # Setup logger for this request
+        logger = setup_logger(ip_address)
+        logger.info(f"New request from IP: {ip_address} ({location['city']}, {location['region']}, {location['country']})")
+        logger.info(f"Concurrent requests: {current_requests}")
+        
+        # Check system resources first
+        resources_ok, resource_info = check_system_resources()
+        if not resources_ok:
+            logger.warning(f"System resources check failed: CPU {resource_info['cpu_usage']}%, Memory {resource_info['memory_usage']}%")
+            decrement_counter()  # Decrement counter before error return
+            return Response(progress_stream_error(resource_info, logger), content_type='text/event-stream')
+
+        if 'file' not in request.files:
+            logger.error("No file part in request")
+            decrement_counter()  # Decrement counter before error return
+            return Response("No file part in request", status=400)
+
+        file = request.files['file']
+        if file.filename == '':
+            logger.error("No selected file")
+            decrement_counter()  # Decrement counter before error return
+            return Response("No selected file", status=400)
+
+        # Save the uploaded RDS file
+        input_file = f"/tmp/{file.filename}"
+        output_file = input_file.replace(".rds", "_ANN.rds")
+        logger.info(f"Saving file to: {input_file}")
+        file.save(input_file)
+
+        def generate():
+            try:
+                for chunk in progress_stream(input_file, output_file, logger):
+                    yield chunk
+            finally:
+                remaining_requests = decrement_counter()
+                print(f"Request completed. Remaining concurrent requests: {remaining_requests}")
+                logger.info(f"Request completed. Remaining concurrent requests: {remaining_requests}")
+
+        return Response(generate(), content_type='text/event-stream')
+        
     except Exception as e:
         logger.error(f"Error during processing: {e}")
+        decrement_counter()  # Decrement counter before error return
         return Response(json.dumps({'error': str(e)}), content_type='application/json', status=500)
 
 # Route to download the output file
