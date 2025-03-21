@@ -275,13 +275,9 @@ def process_rds():
 @app.route('/download_output', methods=['GET'])
 def download_output():
     # Get client IP address and setup logger
-    ip_address = request.remote_addr
-    logger = setup_logger(ip_address)
-    logger.info(f"Download request from IP: {ip_address}")
-    
+    ip_address = request.remote_addr    
     output_file = request.args.get('output_file')
     if not output_file or not os.path.exists(output_file):
-        logger.error(f"Output file not found: {output_file}")
         return Response("Output file not found", status=404)
     
     try:
@@ -292,14 +288,11 @@ def download_output():
         # Copy the file
         import shutil
         shutil.copy2(output_file, log_filename)
-        logger.info(f"Copied output file to logs: {log_filename}")
         
         # Return the original file to the user
-        logger.info(f"Returning output file to user: {output_file}")
         return send_file(output_file, as_attachment=True)
     except Exception as e:
         error_message = f"Error copying file to logs: {str(e)}"
-        logger.error(error_message)
         return Response(error_message, status=500)
 
 if __name__ == '__main__':
