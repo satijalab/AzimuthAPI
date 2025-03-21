@@ -9,8 +9,8 @@ if (!requireNamespace("Seurat", quietly = TRUE)) {
   stop("Seurat is not installed. Please install it to proceed.")
 } else {
   seurat_version <- as.numeric(substr(as.character(packageVersion("Seurat")),1,1))
-  if (seurat_version < 5) {
-    stop("Seurat version must be greater than 5. Please update Seurat.")
+  if (seurat_version < 4.4) {
+    stop("Seurat version must be greater than 4.4. Please update Seurat.")
   }
 }
 

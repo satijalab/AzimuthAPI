@@ -2,32 +2,14 @@
 #'
 #' @param query_obj Seurat object to annotate
 #' @param feature_names_col Column name for feature names
-#' @param source_data_dir Source data directory
-#' @param features_txt Features text file
-#' @param split_mode Split mode for annotation
-#' @param model Model name
-#' @param loss_name Loss function name
-#' @param epochs Number of epochs
-#' @param train_seed Training seed
-#' @param data_seed Data seed
-#' @param data_source Data source
-#' @param data_split Train/validation/test split
-#' @param mask_seed Mask seed
-#' @param tm_frac Training mask fraction
-#' @param lm_frac Label mask fraction
-#' @param save Whether to save results
-#' @param batch_size Batch size
+#' @param annotation_pipeline Set to 'supervised' as a default
 #' @param eval_batch_size Evaluation batch size
-#' @param optimizer_name Optimizer name
-#' @param lr Learning rate
-#' @param l1 L1 regularization
-#' @param l2 L2 regularization
-#' @param dropout Dropout rate
 #' @param normalization_override Whether to override normalization
-#' @param embeddings_mode Embeddings mode
-#' @param if_knn_scores Whether to include KNN scores
-#' @param if_umap_embeddings Whether to include UMAP embeddings
-#' @param if_refine_labels Whether to refine labels
+#' @param norm_check_batch_size Batch size to inspect normalization of data
+#' @param output_mode Output mode for annotated cell metadata
+#' @param refine_labels Whether to refine labels
+#' @param extract_embeddings Whether to azimuth embeddings
+#' @param umap_embeddings Whether to include UMAP embeddings
 #' @param n_neighbors Number of neighbors for UMAP
 #' @param n_components Number of components for UMAP
 #' @param metric Distance metric for UMAP
@@ -37,8 +19,6 @@
 #' @param spread Spread parameter for UMAP
 #' @param verbose Whether to show progress
 #' @param init Initialization method for UMAP
-#' @param object_disk Whether to save object to disk
-#' @param out_file_disk Whether to save output to disk
 #' @param process_obj Whether to process the object
 #' @param cutoff_abs Absolute cutoff for label filtering
 #' @param cutoff_frac Fractional cutoff for label filtering
@@ -47,32 +27,14 @@
 ANNotate <- function(
   query_obj,
   feature_names_col = NULL,
-  source_data_dir = "data/kfold_data",
-  features_txt = "features.txt",
-  split_mode = "cumulative",
-  model = "M0.2",
-  loss_name = "level_wt_focal_loss",
-  epochs = 55,
-  train_seed = 100,
-  data_seed = 414,
-  data_source = "data/kfold_data",
-  data_split = c(7, 1, 2),
-  mask_seed = NULL,
-  tm_frac = NULL,
-  lm_frac = NULL,
-  save = TRUE,
-  batch_size = 256,
+  annotation_pipeline = 'supervised',
   eval_batch_size = 40960,
-  optimizer_name = "adam",
-  lr = NULL,
-  l1 = NULL,
-  l2 = 0.01,
-  dropout = 0.1,
   normalization_override = FALSE,
-  embeddings_mode = "shallow",
-  if_knn_scores = FALSE,
-  if_umap_embeddings = TRUE,
-  if_refine_labels = TRUE,
+  norm_check_batch_size = 1000,
+  output_mode = 'minimal',
+  refine_labels = TRUE,
+  extract_embeddings = TRUE,
+  umap_embeddings = TRUE,
   n_neighbors = 30,
   n_components = 2,
   metric = "cosine",
@@ -82,26 +44,16 @@ ANNotate <- function(
   spread = 1.0,
   verbose = TRUE,
   init = "spectral",
-  object_disk = FALSE,
-  out_file_disk = FALSE,
   process_obj = TRUE,
   cutoff_abs = 5,
   cutoff_frac = 0.001
 ) {
   options(warn = -1)
-  source_data_dir <- paste0(python_module_path, source_data_dir)
+  #source_data_dir <- paste0(python_module_path, source_data_dir)
   cat("Running Pan-Human Azimuth:\n")
   cat("\n")
   
   # Convert integers
-  epochs <- as.integer(epochs)
-  train_seed <- as.integer(train_seed)
-  data_seed <- as.integer(data_seed)
-  data_split <- lapply(data_split, as.integer)
-  if (!is.null(mask_seed)) {
-    mask_seed <- as.integer(mask_seed)
-  }
-  batch_size <- as.integer(batch_size)
   eval_batch_size <- as.integer(eval_batch_size)
   n_neighbors <- as.integer(n_neighbors)
   n_components <- as.integer(n_components)
@@ -111,39 +63,21 @@ ANNotate <- function(
   query <- read_obj_min(query_obj, feature_names_col)
   X_query <- sp$csr_matrix(r_to_py(query$X_query))
   query_features <- query$query_features
-  query_cells_df <- query$query_cells_df
+  cells_meta <- query$query_cells_df
   
   # Run annotation core
   core_outputs <- annotate$annotate_core(
     X_query,
     query_features,
-    source_data_dir,
-    features_txt,
-    split_mode,
-    model,
-    epochs,
-    train_seed,
-    loss_name,
-    data_seed,
-    data_source,
-    data_split,
-    mask_seed,
-    tm_frac,
-    lm_frac,
-    batch_size,
-    optimizer_name,
-    lr,
-    l1,
-    l2, 
-    dropout,
-    save,
+    cells_meta,
+    annotation_pipeline,
     eval_batch_size,
     normalization_override,
-    embeddings_mode,
-    query_cells_df,
-    if_knn_scores,
-    if_umap_embeddings,
-    if_refine_labels,
+    norm_check_batch_size,
+    output_mode,
+    refine_labels,
+    extract_embeddings,
+    umap_embeddings,
     n_neighbors, 
     n_components, 
     metric, 

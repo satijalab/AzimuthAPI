@@ -18,32 +18,11 @@ devtools::install_github("yourusername/PanAzimuth")
 The package requires:
 - R >= 4.0.0
 - reticulate >= 1.40.0
-- Seurat >= 5.0.0
+- Seurat >= 4.4.0
 - conda or miniconda installed on your system
 
 ## Usage
 
-```r
-library(PanAzimuth)
-
-# Check for GPU availability
-if_gpu()
-
-# Set up conda environment
-setup_conda_env(
-  yml_file = "path/to/environment.yml",
-  requirements_file = "path/to/requirements.txt"
-)
-
-# Run analysis
-results <- run_azimuth_api(
-  input_data = your_data,
-  api_endpoint = "your_api_endpoint"
-)
-
-# Process results
-processed_results <- process_azimuth_results(results)
-```
 
 ## License
 

@@ -2,40 +2,75 @@
 # nolint start
 
 
+
+########################################################################
+##### hardware configuration ###########################################
+########################################################################
+########################################################################
+
+
 #### function to check availability of an nvidia gpu through nvidia-smi
 if_gpu <- function() {
-  gpu_check <- system("which nvidia-smi", intern = TRUE, ignore.stderr = TRUE)
-  
-  if (length(gpu_check) == 0) {
-    return(FALSE)
-  } else{
-    return(TRUE)
+  if (.Platform$OS.type == "windows") {
+    # Windows-specific check
+    gpu_check <- tryCatch(
+      system("where nvidia-smi", intern = TRUE, ignore.stderr = TRUE),
+      error = function(e) character(0)
+    )
+  } else {
+    # Unix-like systems (Linux, macOS)
+    gpu_check <- tryCatch(
+      system("which nvidia-smi", intern = TRUE, ignore.stderr = TRUE),
+      error = function(e) character(0)
+    )
   }
+  
+  return(length(gpu_check) > 0)
 }
+
+
+
+
+########################################################################
+####### environment and dependencies ###################################
+########################################################################
+########################################################################
 
 
 #### creating and setting up conda environment
 if (!requireNamespace("reticulate", quietly = TRUE) || 
     packageVersion("reticulate") < "1.40.0") {
-  message("Installing or updating reticulate to version 1.40.0 alongwith dependencies Rcpp and RcppTOML...")
+  message(
+    paste0("Installing or updating reticulate to version 1.40.0 ",
+            "alongwith dependencies Rcpp and RcppTOML...")
+    )
   install.packages("Rcpp")
   install.packages("RcppTOML")
   install.packages("reticulate")
   
   if (!requireNamespace("reticulate", quietly = TRUE) || 
       packageVersion("reticulate") < "1.40.0") {
-    stop("Failed to install or update reticulate to version 1.40.0. Please resolve this issue externally.")
+    stop(
+      paste0("Failed to install or update reticulate to ",
+      "version 1.40.0. Please resolve this issue externally.")
+      )
   } else {
     message("reticulate successfully updated to version 1.40.0.")
   }
-} else {
-  message("reticulate is already installed and up to date.")
-}
+} 
+
 library(reticulate)
 
 #### create conda env and install dependencies
-setup_conda_env <- function(yml_file, requirements_file, conda_path=NULL, force_create=FALSE) {
-  
+setup_conda_env <- function(
+  yml_file, 
+  requirements_file = NULL, 
+  conda_path = NULL, 
+  force_create = FALSE,
+  tensorflow_gpu = "tensorflow[and-cuda]==2.17",
+  tensorflow_cpu = "tensorflow-cpu==2.17.0"
+) {
+  # Validate conda installation
   if (is.null(conda_path)) {
     conda_path <- reticulate::conda_binary()
   }
@@ -43,77 +78,137 @@ setup_conda_env <- function(yml_file, requirements_file, conda_path=NULL, force_
     stop("Conda not found. Please install conda or miniconda and try again.")
   }
   
-  env_name <- "AzimuthNN_min" 
+  # Parse and validate YAML environment file
+  library(yaml)
+  if (!file.exists(yml_file)) {
+    stop(sprintf("YML file does not exist at the path: %s", yml_file))
+  }
+  yml_data <- tryCatch(
+    yaml::read_yaml(yml_file),
+    error = function(e) {
+      stop(sprintf("Error reading YAML file: %s", e$message))
+    }
+  )
+  env_name <- yml_data$name
   
-  env_check_command <- sprintf('%s env list | grep "%s"', conda_path, env_name)
-  env_check <- system(env_check_command, intern = TRUE)
+  # Check if environment exists
+  env_exists <- env_name %in% reticulate::conda_list()$name
   
-  if (force_create && length(env_check) > 0) {
-    message(sprintf("Conda environment '%s' exists, but force_create is TRUE. Deleting it first...", env_name))
+  # Handle force_create flag
+  if (force_create && env_exists) {
+    message(sprintf(
+      "Conda environment '%s' exists, but force_create is TRUE. Deleting it...",
+      env_name
+    ))
     system2(conda_path, c("env", "remove", "--name", env_name, "--yes"))
     message(sprintf("Environment '%s' deleted successfully.", env_name))
-    env_check <- character(0) 
+    env_exists <- FALSE
   }
   
-  
-  if (length(env_check) == 0) {
-    message(sprintf("Conda environment '%s' does not exist. Creating it first...", env_name))
-    
-    if (!file.exists(yml_file)) {
-      stop(sprintf("YML file does not exist at the path: %s", yml_file))
-    }
-    
-    library(yaml)
-    yml_data <- yaml::read_yaml(yml_file)
-    env_name <- yml_data$name
-    
-    message(sprintf("Creating conda environment '%s' from '%s'...", env_name, yml_file))
-    
-    cmd <- c("env", "create", "-f", yml_file) 
-    message(sprintf("Running command: %s", paste(cmd, collapse = " ")))
-    
-    
-    system2(conda_path, cmd)
-    
-    message(sprintf("Environment '%s' created successfully.", env_name))
-    
-    reticulate::use_condaenv(condaenv = env_name, conda = conda_path, required = TRUE)
-    message(sprintf("Environment '%s' is now active.", env_name))
-    
-    active_env <- reticulate::py_config()$python
-    expected_env <- file.path(dirname(dirname(conda_path)), "envs", env_name, "bin", "python")
-    
-    if (normalizePath(active_env) != normalizePath(expected_env)) {
-      stop(sprintf(
-        "Error: Reticulate is not connected to the expected conda environment properly.\nExpected: %s\nActive: %s",
-        expected_env, active_env
-      ))
-    } else {
-      message(sprintf("Reticulate is correctly connected to: %s", active_env))
-    }
-    
-    print(reticulate::py_config())
-  } else {
-    message(sprintf("Conda environment '%s' found.", env_name))
-    
-    reticulate::use_condaenv(condaenv = env_name, conda = conda_path, required = TRUE)
-    message(sprintf("Environment '%s' is now active.", env_name))
-    
-    active_env <- reticulate::py_config()$python
-    expected_env <- file.path(dirname(dirname(conda_path)), "envs", env_name, "bin", "python")
-    
-    if (normalizePath(active_env) != normalizePath(expected_env)) {
-      stop(sprintf(
-        "Error: Reticulate is not connected to the expected conda environment properly.\nExpected: %s\nActive: %s",
-        expected_env, active_env
-      ))
-    } else {
-      message(sprintf("Reticulate is correctly connected to: %s", active_env))
-    }
-    
-    print(reticulate::py_config())
+  # Create environment if it doesn't exist
+  if (!env_exists) {
+    message(sprintf(
+      "Creating conda environment '%s' from '%s'...", 
+      env_name, 
+      yml_file
+    ))
+    system2(conda_path, c("env", "create", "-f", yml_file))
+    message(sprintf("Environment '%s' created.", env_name))
   }
   
+  # Activate the environment
+  message(sprintf("Activating environment '%s'...", env_name))
+  reticulate::use_condaenv(
+    condaenv = env_name,
+    conda = conda_path,
+    required = TRUE
+  )
+  message(sprintf("Environment '%s' is now active.", env_name))
+  
+  # Verify environment connection
+  python_binary <- ifelse(
+    .Platform$OS.type == "windows",
+    file.path("Scripts", "python.exe"),
+    "bin/python"
+  )
+  
+  active_env <- reticulate::py_config()$python
+  expected_env <- file.path(
+    dirname(dirname(conda_path)), 
+    "envs", 
+    env_name, 
+    python_binary
+  )
+  
+  verify_environment <- function() {
+    tryCatch({
+      if (normalizePath(active_env) != normalizePath(expected_env)) {
+        stop(sprintf(
+          paste0(
+            "Error: Reticulate is not connected to the expected conda ",
+            "environment properly.\nExpected: %s\nActive: %s"
+          ),
+          expected_env, 
+          active_env
+        ))
+      }
+      message(sprintf("Reticulate is connected to: %s", active_env))
+    }, error = function(e) {
+      warning(sprintf(
+        paste0(
+          "Could not verify environment paths due to: %s\n",
+          "Raw paths - Expected: %s, Active: %s"
+        ), 
+        e$message, expected_env, active_env
+      ))
+    })
+  }
+  
+  verify_environment()
+  
+  # Install additional requirements if environment was just created
+  if (!env_exists && 
+      !is.null(requirements_file) && 
+      file.exists(requirements_file)) {
+    
+    message(sprintf("Installing dependencies from %s...", requirements_file))
+    
+    # Install requirements file
+    system2(conda_path, c(
+      "run", "-n", env_name, "pip", "install", "-r", requirements_file
+    ))
+    
+    # Upgrade pip
+    system2(conda_path, c(
+      "run", "-n", env_name, "pip", "install", "--upgrade", "pip"
+    ))
+    
+    # Upgrade keras
+    system2(conda_path, c(
+      "run", "-n", env_name, "pip", "install", "--upgrade", "keras"
+    ))
+    
+    # Install appropriate TensorFlow version
+    if (if_gpu()) {
+      message("GPU detected, installing GPU version of TensorFlow...")
+      system2(conda_path, c(
+        "run", "-n", env_name, "pip", "install", tensorflow_gpu
+      ))
+    } else {
+      message("No GPU detected, installing CPU version of TensorFlow...")
+      system2(conda_path, c(
+        "run", "-n", env_name, "pip", "install", tensorflow_cpu
+      ))
+    }
+    
+    message("All dependencies installed through pip.")
+  } else if (!env_exists && 
+             (is.null(requirements_file) || !file.exists(requirements_file))) {
+    message("Requirements file not provided or doesn't exist.")
+  }
+  
+  # Print final Python configuration
+  print(reticulate::py_config())
 }
 
 yml_path <- "utils/env_min.yml" 
@@ -124,30 +219,44 @@ setup_conda_env(yml_file = yml_path, requirements_file = requirements_path)
 
 
 #### R dependencies
+if (!requireNamespace("Seurat", quietly = TRUE)) {
+  stop("Seurat is not installed. Please install it to proceed.")
+} else {
+  seurat_version <- as.numeric(substr(
+    as.character(packageVersion("Seurat")),
+    1,
+    1
+    ))  
+}
+
 library(Seurat)
 library(Matrix)
 
-ensure_argparse <- function() {
-  if (!requireNamespace("argparse", quietly = TRUE)) {
-    message("The 'argparse' package is not installed. Installing now...")
-    install.packages("argparse")
-    message("'argparse' package installed successfully.")
-  } else {
-    message("'argparse' package is already installed.")
-  }
-}
 
-ensure_argparse()
-library(argparse)
+#### python dependencies
+home_dir <- ifelse(.Platform$OS.type == "windows", 
+                   Sys.getenv("USERPROFILE"), 
+                   file.path("/home", Sys.getenv("USER")))
+python_module_path <- file.path(home_dir, "panhumanpy/")
+python_module_src <- file.path(home_dir, "panhumanpy/src")
 
-#### other python dependencies
-python_module_path <- file.path("/home", Sys.getenv("USER"), "panhumanpy/")
-python_module_src <- file.path("/home", Sys.getenv("USER"), "panhumanpy/src")
-py_run_string(paste("import sys; sys.path.append('", python_module_src, "')", sep = ""))
-annotate <- import("panhumanpy.core.ANNotate")
+py_run_string(paste(
+  "import sys; sys.path.append('", python_module_src, "')", 
+  sep = ""
+  ))
+annotate <- import("panhumanpy.ANNotate")
 sp <- import("scipy.sparse")
 
-#### functions
+
+
+
+########################################################################
+######### util functions ###############################################
+########################################################################
+########################################################################
+
+
+
 
 get_data <- function(object, assay, layer= "data") {
   if (packageVersion("Seurat") >= "5.0.0") {
@@ -158,27 +267,8 @@ get_data <- function(object, assay, layer= "data") {
   }
 }
 
-read_obj_R <- function(query_filepath, feature_names_col) {
-  query_obj <- readRDS(query_filepath)
-  if ("data" %in% names(query_obj@assays$RNA)) {
-    normalized_data <- LayerData(query_obj,layer = 'data')
-  } else {
-    query_obj <- NormalizeData(query_obj)
-    normalized_data <- LayerData(query_obj,layer = 'data')
-  }
-  X_query <- t(normalized_data)
-  X_query <- Matrix(X_query, sparse = TRUE)
-  cell_metadata <- query_obj@meta.data
-  query_cells_df <- as.data.frame(cell_metadata)
-  
-  if (!is.null(feature_names_col)) {
-    query_features <- as.list(query_obj@assays$RNA@meta.features[[feature_names_col]])
-  } else {
-    query_features <- as.list(rownames(normalized_data))
-  }
-  
-  return(list(X_query = X_query, query_features = query_features, query_cells_df = query_cells_df, query_obj = query_obj))
-}
+
+########################################################################
 
 
 read_obj_min <- function(query_obj, feature_names_col, assay_default='RNA') {
@@ -214,47 +304,99 @@ read_obj_min <- function(query_obj, feature_names_col, assay_default='RNA') {
       query_features <- query_obj[[assay_default]][[feature_names_col]]
       query_features <- as.list(query_features[[feature_names_col]])
     } else {
-      stop(paste(feature_names_col, "not found as a column in the df returned by object[[",assay_default,"]][[]]"))
+      stop(paste(
+        feature_names_col, 
+        "not found as a column in the df returned by ",
+        "object[[",assay_default,"]][[]]"
+        ))
     }
     
   } else {
     query_features <- as.list(rownames(normalized_data))
   }
-  return(list(X_query = X_query, query_features = query_features, query_cells_df = query_cells_df))
+  return(list(
+    X_query = X_query, 
+    query_features = query_features, 
+    query_cells_df = query_cells_df
+    ))
 }
 
-package_obj <- function(embeddings_mode, embeddings_dict, if_umap_embeddings, umap_embeddings_dict, query_cells_df, query_obj) {
+########################################################################
+
+
+package_obj <- function(
+  extract_embeddings, 
+  embeddings_dict, 
+  umap_embeddings, 
+  umap_embeddings_dict, 
+  query_cells_df, 
+  query_obj
+  ) {
   
-  if (!is.null(embeddings_mode)) {
+  if (extract_embeddings) {
     for (em_name in names(embeddings_dict)) {
+      
       em_matrix <- as.matrix(embeddings_dict[[em_name]])
       
       if (nrow(em_matrix) != length(Cells(query_obj))) {
-        stop(paste("Dimension mismatch:", em_name, " does not have as many cells as the query obj."))
+        stop(paste(
+          "Dimension mismatch:", em_name, " does not have as many ",
+          "cells as the query obj."
+          ))
       }
+      
       rownames(em_matrix) <- Cells(query_obj)
-      dimreduc_obj <- CreateDimReducObject(embeddings = em_matrix, key = paste0("ANN", em_name, "_"), assay = DefaultAssay(query_obj))
-      query_obj[[paste0("ANN", em_name)]] <- dimreduc_obj
+      
+      dimreduc_obj <- CreateDimReducObject(
+        embeddings = em_matrix, 
+        key = paste0(em_name, "_"), 
+        assay = DefaultAssay(query_obj)
+        )
+      
+      query_obj[[em_name]] <- dimreduc_obj
     }
   }
   
-  if (if_umap_embeddings) {
+  if (umap_embeddings) {
     for (em_name in names(umap_embeddings_dict)) {
+      
       em_matrix <- as.matrix(umap_embeddings_dict[[em_name]])
+      
       if (nrow(em_matrix) != length(Cells(query_obj))) {
-        stop(paste("Dimension mismatch:", em_name, " does not have as many cells as the query obj."))
+        stop(paste(
+          "Dimension mismatch:", em_name, " does not ",
+          "have as many cells as the query obj."
+          ))
       }
+      
       rownames(em_matrix) <- Cells(query_obj)
-      dimreduc_obj <- CreateDimReducObject(embeddings = em_matrix, key = paste0("umapANN", em_name, "_"), assay = DefaultAssay(query_obj))
-      query_obj[[paste0("umapANN", em_name)]] <- dimreduc_obj
+      
+      dimreduc_obj <- CreateDimReducObject(
+        embeddings = em_matrix, 
+        key = paste0(em_name, "_"), 
+        assay = DefaultAssay(query_obj)
+        )
+      
+      query_obj[[em_name]] <- dimreduc_obj
     }
   }
   
   query_obj@meta.data <- as.data.frame(query_cells_df)  
+  
   return(query_obj)
 }
 
-PrepLabel <- function(object, label_id = 'final_level_label', newid = 'PrepLabel', cutid = 'Other', cutoff=10) {
+
+########################################################################
+
+
+PrepLabel <- function(
+  object, 
+  label_id = 'final_level_labels', 
+  newid = 'PrepLabel', 
+  cutid = 'Other', 
+  cutoff=10
+  ) {
   rejected_names <- names(which(table(object@meta.data[,label_id])<cutoff))
   object@meta.data[,newid]=as.character(object@meta.data[,label_id])
   rejected_cells <- which(object@meta.data[,label_id]%in%rejected_names)
@@ -262,111 +404,64 @@ PrepLabel <- function(object, label_id = 'final_level_label', newid = 'PrepLabel
   return(object)
 }
 
-ANNotate <- function(
-                    query_obj,
-                    feature_names_col=NULL,
-                    source_data_dir="data/kfold_data",
-                    features_txt="features.txt",
-                    split_mode="cumulative",
-                    model="M0.2",
-                    loss_name="level_wt_focal_loss",
-                    epochs=55,
-                    train_seed=100,
-                    data_seed=414,
-                    data_source="data/kfold_data",
-                    data_split=c(7,1,2),
-                    mask_seed=NULL,
-                    tm_frac=NULL,
-                    lm_frac=NULL,
-                    save=TRUE,
-                    batch_size=256,
-                    eval_batch_size=40960,
-                    optimizer_name="adam",
-                    lr=NULL,
-                    l1=NULL,
-                    l2=0.01,
-                    dropout=0.1,
-                    normalization_override=FALSE,
-                    embeddings_mode="shallow",
-                    if_knn_scores=FALSE,
-                    if_umap_embeddings=TRUE,
-                    if_refine_labels=TRUE,
-                    n_neighbors=30,
-                    n_components=2,
-                    metric="cosine",
-                    min_dist=0.3,
-                    umap_lr=1.0,
-                    umap_seed=42,
-                    spread=1.0,
-                    verbose=TRUE,
-                    init="spectral",
-                    object_disk=FALSE,
-                    out_file_disk=FALSE,
-                    process_obj=TRUE,
-                    cutoff_abs=5,
-                    cutoff_frac=0.001){
 
+########################################################################
+
+
+ANNotate <- function(
+  query_obj,
+  feature_names_col = NULL,
+  annotation_pipeline = 'supervised',
+  eval_batch_size = 40960,
+  normalization_override = FALSE,
+  norm_check_batch_size = 1000,
+  output_mode = 'minimal',
+  refine_labels = TRUE,
+  extract_embeddings = TRUE,
+  umap_embeddings = TRUE,
+  n_neighbors = 30,
+  n_components = 2,
+  metric = "cosine",
+  min_dist = 0.3,
+  umap_lr = 1.0,
+  umap_seed = 42,
+  spread = 1.0,
+  verbose = TRUE,
+  init = "spectral",
+  process_obj = TRUE,
+  cutoff_abs = 5,
+  cutoff_frac = 0.001
+) {
   options(warn = -1)
-  source_data_dir <- paste0(python_module_path, source_data_dir)
   cat("Running Pan-Human Azimuth:\n")
   cat("\n")
   
-  #### make sure that integers are passed to python as integers
-  epochs <- as.integer(epochs)
-  train_seed <- as.integer(train_seed)
-  data_seed <- as.integer(data_seed)
-  data_split <- lapply(data_split, as.integer)
-  if (!is.null(mask_seed)){
-    mask_seed <- as.integer(mask_seed)
-  }
-  batch_size <- as.integer(batch_size)
+  # Convert integers
   eval_batch_size <- as.integer(eval_batch_size)
+  norm_check_batch_size <- as.integer(norm_check_batch_size)
   n_neighbors <- as.integer(n_neighbors)
   n_components <- as.integer(n_components)
   umap_seed <- as.integer(umap_seed)
-
-   
   
-  #### reading the seurat object 
+  # Read and process the Seurat object
   query <- read_obj_min(query_obj, feature_names_col)
   X_query <- sp$csr_matrix(r_to_py(query$X_query))
   query_features <- query$query_features
-  query_cells_df <- query$query_cells_df
-
+  cells_meta <- query$query_cells_df
   
-  
-  
-  #### run annotate_core
+  # Run annotation core
   core_outputs <- annotate$annotate_core(
     X_query,
     query_features,
-    source_data_dir,
-    features_txt,
-    split_mode,
-    model,
-    epochs,
-    train_seed,
-    loss_name,
-    data_seed,
-    data_source,
-    data_split,
-    mask_seed,
-    tm_frac,
-    lm_frac,
-    batch_size,
-    optimizer_name,
-    lr,
-    l1,
-    l2, 
-    dropout,
-    save,
+    cells_meta,
+    annotation_pipeline,
     eval_batch_size,
     normalization_override,
-    embeddings_mode,
-    query_cells_df,
-    if_knn_scores,
-    if_umap_embeddings,
-    if_refine_labels,
+    norm_check_batch_size,
+    output_mode,
+    refine_labels,
+    extract_embeddings,
+    umap_embeddings,
     n_neighbors, 
     n_components, 
     metric, 
@@ -379,18 +474,29 @@ ANNotate <- function(
   )
   
   
-  embeddings_mode <- core_outputs[[3]]
-  embeddings_dict <- core_outputs[[4]]
-  query_cells_df <- core_outputs[[10]]
-  if_umap_embeddings <- core_outputs[[11]]
-  umap_embeddings_dict <- core_outputs[[12]]
+  embeddings_dict <- core_outputs$embeddings_dict
+  umap_embeddings_dict <- core_outputs$umap_dict
+  cells_meta <- core_outputs$cells_meta
   
-  annotated_obj = package_obj(embeddings_mode, embeddings_dict, if_umap_embeddings, umap_embeddings_dict, query_cells_df, query_obj)
+  annotated_obj = package_obj(
+    extract_embeddings, 
+    embeddings_dict, 
+    umap_embeddings, 
+    umap_embeddings_dict, 
+    cells_meta, 
+    query_obj
+    )
   
   
   
   if (process_obj){
-    annotated_obj <- PrepLabel(annotated_obj,label_id = 'final_level_label',cutoff = min(cutoff_abs, cutoff_frac*ncol(annotated_obj)),cutid = 'Other',newid = 'azimuth_label')
+    annotated_obj <- PrepLabel(
+      annotated_obj,
+      label_id = 'final_level_labels',
+      cutoff = min(cutoff_abs, cutoff_frac*ncol(annotated_obj)),
+      cutid = 'Other',
+      newid = 'azimuth_label'
+      )
     Idents(annotated_obj) <- 'azimuth_label'
   }
   
@@ -400,568 +506,446 @@ ANNotate <- function(
   
 }
 
-arg_parse_in_R <- function() {
-  cat("Capturing arguments passed to R scipt...")
-  cat("\n")
+
+
+########################################################################
+########## functions for command-line usage ############################
+########################################################################
+########################################################################
+
+
+
+read_seurat_object <- function(filepath, assay_name = "RNA") {
+  # Check if file exists
+  if (!file.exists(filepath)) {
+    stop(paste("File does not exist at the specified path:", filepath))
+  }
   
-  parser <- ArgumentParser(description = "Argument parser for the script")
+  # Check file extension
+  if (!grepl("\\.rds$", filepath, ignore.case = TRUE)) {
+    warning("File does not have .rds extension. Attempting to read anyway.")
+  }
   
+  # Load the RDS file
+  tryCatch({
+    seurat_obj <- readRDS(filepath)
+  }, error = function(e) {
+    stop(paste("Error reading RDS file:", e$message))
+  })
+  
+  # Check if it's a Seurat object
+  if (!inherits(seurat_obj, "Seurat")) {
+    stop("The file does not contain a Seurat object.")
+  }
+  
+  # Check Seurat version
+  seurat_version <- packageVersion("Seurat")
+  if (seurat_version < "4.4.0") {
+    warning(paste(
+      "Current Seurat version:", seurat_version, 
+      "is below 4.4.0. Some functionality may ",
+      "not work as expected."
+      ))
+  }
+  
+  # Check if specified assay exists
+  if (!assay_name %in% names(seurat_obj@assays)) {
+    available_assays <- paste(names(seurat_obj@assays), collapse = ", ")
+    stop(paste("Assay", assay_name, "not found in the Seurat object.",
+               "Available assays:", available_assays))
+  }
+  
+  # Set default assay
+  DefaultAssay(seurat_obj) <- assay_name
+  
+  return(seurat_obj)
+}
+
+
+
+########################################################################
+
+save_seurat_object <- function(seurat_obj, filepath) {
+  # Check if object is a Seurat object
+  if (!inherits(seurat_obj, "Seurat")) {
+    stop("The object is not a Seurat object.")
+  }
+  
+  # Construct output filepath
+  dir_path <- dirname(filepath)
+  file_name <- basename(filepath)
+  file_name_ann <- sub("\\.rds$", "_ANN.rds", file_name)
+  if (file_name == file_name_ann) {
+    # If no .rds extension was found, add it
+    file_name_ann <- paste0(file_name, "_ANN.rds")
+  }
+  output_path <- file.path(dir_path, file_name_ann)
+  
+  # This is a joke about massively dieting the object
+  # so that we don't redownload expression or embedding data
+  # in this API case we know the object has an RNA assay with counts and
+  # data layers
+  keto_object=TRUE
+  if (keto_object) {
+    if ("RNA" %in% names(seurat_obj@assays)) {
+      # Get Seurat version
+      seurat_version <- packageVersion("Seurat")
+      
+      # Use version-specific approach
+      if (seurat_version >= "5.0.0") {
+        # For Seurat v5+
+        tryCatch({
+          # Check what layers are available
+          available_layers <- Layers(seurat_obj[["RNA"]])
+          
+          # Replace data layer if it exists
+          if ("data" %in% available_layers) {
+            seurat_obj[["RNA"]]$data <- Matrix::Matrix(
+              0, 
+              nrow = nrow(seurat_obj[["RNA"]]$data),
+              ncol = ncol(seurat_obj[["RNA"]]$data),
+              sparse = TRUE
+            )
+          }
+          
+          # Replace counts layer if it exists
+          if ("counts" %in% available_layers) {
+            seurat_obj[["RNA"]]$counts <- Matrix::Matrix(
+              0, 
+              nrow = nrow(seurat_obj[["RNA"]]$counts),
+              ncol = ncol(seurat_obj[["RNA"]]$counts),
+              sparse = TRUE
+            )
+          }
+        }, error = function(e) {
+          warning("Error while processing Seurat v5 layers: ", e$message)
+        })
+      } else {
+        # For Seurat v4 and below
+        tryCatch({
+          # Check what slots are available
+          available_slots <- slotNames(seurat_obj[["RNA"]])
+          
+          # Replace data slot if it exists
+          if ("data" %in% available_slots) {
+            slot(seurat_obj[["RNA"]], "data") <- Matrix::Matrix(
+              0, 
+              nrow = nrow(slot(seurat_obj[["RNA"]], "data")),
+              ncol = ncol(slot(seurat_obj[["RNA"]], "data")),
+              sparse = TRUE
+            )
+          }
+          
+          # Replace counts slot if it exists
+          if ("counts" %in% available_slots) {
+            slot(seurat_obj[["RNA"]], "counts") <- Matrix::Matrix(
+              0, 
+              nrow = nrow(slot(seurat_obj[["RNA"]], "counts")),
+              ncol = ncol(slot(seurat_obj[["RNA"]], "counts")),
+              sparse = TRUE
+            )
+          }
+        }, error = function(e) {
+          warning("Error while processing Seurat v4 slots: ", e$message)
+        })
+      }
+    }
+    
+    # Remove ANNshallow_embeddings
+    if ("azimuth_embed" %in% names(seurat_obj@reductions)) {
+      seurat_obj[["azimuth_embed"]] <- NULL
+    }
+  }
+  
+  # Save the object
+  message("Saving annotated object to ", output_path)
+  saveRDS(seurat_obj, file = output_path)
+  
+  # Return the path invisibly
+  invisible(output_path)
+}
+
+########################################################################
+
+parse_annotate_args <- function() {
+  # Check if argparse is available
+  if (!requireNamespace("argparse", quietly = TRUE)) {
+    install.packages("argparse")
+    library(argparse)
+  } else {
+    library(argparse)
+  }
+  
+  message("Parsing command line arguments...")
+  
+  # Create argument parser
+  parser <- ArgumentParser(description = "Command line interface for ANNotate function")
+  
+  # Required arguments
   parser$add_argument(
     "filepath",
-    help = "Enter abs file path to the query. Query should be in h5ad format.",
+    help = "Path to the Seurat object RDS file",
     type = "character"
   )
   
+  # Optional arguments 
   parser$add_argument(
-    "-fn", "--feature_names_col",
+    "-f", "--feature_names_col",
     default = NULL,
-    help = "Enter the column name where the feature names are stored in query.var where query is the anndata object read from the h5ad.",
+    help = "Column name containing feature names (default: NULL)",
     type = "character"
   )
-  
+
   parser$add_argument(
-    "-sdd", "--source_data_dir",
-    default = paste0(python_module_path, "data/kfold_data"),
-    help = "Source data directory",
+    "-p", "--annotation_pipeline",
+    default = "supervised",
+    help = "Annotation pipeline to use (default: 'supervised')",
     type = "character"
-  )
-  
-  parser$add_argument(
-    "-ft", "--features_txt",
-    default = "features.txt",
-    help = "Features text file",
-    type = "character"
-  )
-  
-  parser$add_argument(
-    "-m", "--mode",
-    default = "cumulative",
-    help = "Enter the label mode: cumulative or independent",
-    type = "character"
-  )
-  
-  parser$add_argument(
-    "-md", "--model",
-    default = "M0.2",
-    help = "Enter the model name",
-    type = "character"
-  )
-  
-  parser$add_argument(
-    "-l", "--loss",
-    default = "level_wt_focal_loss",
-    help = "Enter the loss function used for optimization",
-    type = "character"
-  )
-  
-  parser$add_argument(
-    "--epochs",
-    default = 55,
-    help = "Enter the number of epochs the model has been trained for",
-    type = "integer"
-  )
-  
-  parser$add_argument(
-    "-ts", "--train_seed",
-    default = 100,
-    help = "Enter the training seed used",
-    type = "integer"
-  )
-  
-  parser$add_argument(
-    "-ds", "--data_seed",
-    default = 414,
-    help = "Enter the data prep seed that was used",
-    type = "integer"
-  )
-  
-  parser$add_argument(
-    "-dso", "--data_source",
-    default = "data/kfold_data/datasets/fold10_02_26_2025_17_53_139",
-    help = "Enter the source dataset with no / at either end",
-    type = "character"
-  )
-  
-  parser$add_argument(
-    "-dsp", "--data_split",
-    nargs = 3,
-    default = c(7, 1, 2),
-    help = "Enter the train:valid:test split as ints separated by a space",
-    type = "integer"
-  )
-  
-  parser$add_argument(
-    "-ms", "--mask_seed",
-    default = NULL,
-    help = "Enter the seed used in the masking processes",
-    type = "integer"
-  )
-  
-  parser$add_argument(
-    "-tm", "--tail_mask",
-    nargs = 2,
-    default = NULL,
-    help = "Enter the tail masking parameters as floats separated by a space: [frac of cells masked, max frac of tail depth masked]",
-    type = "double"
-  )
-  
-  parser$add_argument(
-    "-slm", "--single_level_mask",
-    default = NULL,
-    help = "Enter the fraction of cells in which a single random level was masked",
-    type = "double"
-  )
-  
-  parser$add_argument(
-    "-bs", "--batch_size",
-    default = 256,
-    help = "Enter the batch size used in training",
-    type = "integer"
-  )
+  )  
   
   parser$add_argument(
     "-ebs", "--eval_batch_size",
     default = 40960,
-    help = "Enter the evaluation batch size suitable to your hardware, defaults to 40960",
+    help = "Batch size for evaluation (default: 40960)",
     type = "integer"
   )
   
   parser$add_argument(
-    "-opt", "--optimizer",
-    default = "adam",
-    help = "Enter the name of the optimizer used",
-    type = "character"
-  )
-  
-  parser$add_argument(
-    "-lr", "--lr",
-    default = NULL,
-    help = "Enter the learning rate used",
-    type = "double"
-  )
-  
-  parser$add_argument(
-    "-l1", "--l1",
-    default = NULL,
-    help = "Enter L1 reg strength used if any",
-    type = "double"
-  )
-  
-  parser$add_argument(
-    "-l2", "--l2",
-    default = 0.01,
-    help = "Enter L2 reg strength used if any",
-    type = "double"
-  )
-  
-  parser$add_argument(
-    "-dp", "--dropout",
-    default = 0.1,
-    help = "Enter dropout rate used if any",
-    type = "double"
-  )
-  
-  parser$add_argument(
-    "-norm", "--normalization_override", 
+    "-no", "--normalization_override",
+    action = "store_true",
     default = FALSE,
-    help = "is the counts data lop1p normalized after scaling to 10k? defaults to False", 
-    type = "logical"
+    help = "Override normalization (default: FALSE)"
   )
   
   parser$add_argument(
-    "-em", "--embeddings",
-    default = "shallow",
-    help = "extract embeddings? defaults to 'shallow', other options: ['deep', 'both']",
+    "-ncb", "--norm_check_batch_size",
+    default = 1000,
+    help = "Batch size for normalization check (default: 1000)",
+    type = "integer"
+  )
+  
+  parser$add_argument(
+    "-om", "--output_mode",
+    default = "minimal",
+    help = "Output mode (default: 'minimal')",
     type = "character"
   )
   
   parser$add_argument(
-    "-knn", "--knn_scores",
-    default = FALSE,
-    help = "specify if you want scores based on k nearest neighbours, defaults to False",
-    type = "logical"
-  )
-  
-  parser$add_argument(
-    "-umap", "--umap_embeddings",
+    "-rl", "--refine_labels",
+    action = "store_true",
     default = TRUE,
-    help = "specify if you want umap embeddings, defaults to True",
-    type = "logical"
-  )
+    help = "Refine labels (default: TRUE)"
+  )  
   
   parser$add_argument(
-    "-irl", "--if_refine_labels",
+    "-ee", "--extract_embeddings",
+    action = "store_true",
     default = TRUE,
-    help = "whether to refine labels, defaults to True",
-    type = "logical"
+    help = "Extract embeddings (default: TRUE)"
   )
   
   parser$add_argument(
-    "-nnbrs", "--n_neighbors", 
-    default = 30, 
-    help = "n_neighbors param for umaps, defaults to Seurat default 30", 
+    "-ue", "--umap_embeddings",
+    action = "store_true",
+    default = TRUE,
+    help = "Generate UMAP embeddings (default: TRUE)"
+  )
+  
+  parser$add_argument(
+    "-nn", "--n_neighbors",
+    default = 30,
+    help = "Number of neighbors for UMAP (default: 30)",
     type = "integer"
   )
   
   parser$add_argument(
-    "-nc", "--n_components", 
-    default = 2, 
-    help = "n_components param for umaps, defaults to Seurat default 2", 
+    "-nc", "--n_components",
+    default = 2,
+    help = "Number of components for UMAP (default: 2)",
     type = "integer"
   )
   
   parser$add_argument(
-    "-me", "--metric", 
-    default = "cosine", 
-    help = "metric param for umaps, defaults to Seurat default 'cosine'", 
+    "-m", "--metric",
+    default = "cosine",
+    help = "Distance metric for UMAP (default: 'cosine')",
     type = "character"
   )
   
   parser$add_argument(
-    "-mdt", "--min_dist", 
-    default = 0.3, 
-    help = "min_dist param for umaps, defaults to Seurat default 0.3", 
-    type = "numeric"
+    "-md", "--min_dist",
+    default = 0.3,
+    help = "Minimum distance for UMAP (default: 0.3)",
+    type = "double"
   )
   
   parser$add_argument(
-    "-ulr", "--umap_lr", 
-    default = 1.0, 
-    help = "learning_rate param for umaps, defaults to Seurat default 1.0", 
-    type = "numeric"
+    "-ulr", "--umap_lr",
+    default = 1.0,
+    help = "Learning rate for UMAP (default: 1.0)",
+    type = "double"
   )
   
   parser$add_argument(
-    "-useed", "--umap_seed", 
-    default = 42, 
-    help = "random_state param for reproducibility of umaps, defaults to Seurat default 42", 
+    "-us", "--umap_seed",
+    default = 42,
+    help = "Random seed for UMAP (default: 42)",
     type = "integer"
   )
   
   parser$add_argument(
-    "-sp", "--spread", 
-    default = 1.0, 
-    help = "spread param for umaps, defaults to Seurat default 1.0", 
-    type = "numeric"
+    "-sp", "--spread",
+    default = 1.0,
+    help = "Spread parameter for UMAP (default: 1.0)",
+    type = "double"
   )
   
   parser$add_argument(
-    "-uv", "--umap_verbose", 
-    default = TRUE, 
-    help = "verbose param for umaps, defaults to TRUE", 
-    type = "logical"
+    "-v", "--verbose",
+    action = "store_true",
+    default = TRUE,
+    help = "Verbose output (default: TRUE)"
   )
   
   parser$add_argument(
-    "-uin", "--umap_init", 
-    default = "spectral", 
-    help = "init param for umaps, defaults to 'spectral', the other option is 'random'", 
+    "-i", "--init",
+    default = "spectral",
+    help = "Initialization method for UMAP (default: 'spectral')",
     type = "character"
-  )
-  
-  parser$add_argument(
-    "-objd", "--object_disk", 
-    default = TRUE, 
-    help = "do you want to write object to disk? default is TRUE", 
-    type = "logical"
-  )
-  
-  parser$add_argument(
-    "-ofd", "--out_file_disk", 
-    default = TRUE, 
-    help = "do you want to write separate files to disk? default is TRUE", 
-    type = "logical"
   )
   
   parser$add_argument(
     "-po", "--process_obj",
+    action = "store_true",
     default = TRUE,
-    help = "whether to process the object with PrepLabel, defaults to TRUE",
-    type = "logical"
+    help = "Process object with PrepLabel (default: TRUE)"
   )
   
   parser$add_argument(
     "-ca", "--cutoff_abs",
     default = 5,
-    help = "absolute cutoff for PrepLabel, defaults to 5",
+    help = "Absolute cutoff for PrepLabel (default: 5)",
     type = "integer"
   )
   
   parser$add_argument(
     "-cf", "--cutoff_frac",
     default = 0.001,
-    help = "fractional cutoff for PrepLabel, defaults to 0.001",
-    type = "numeric"
+    help = "Fractional cutoff for PrepLabel (default: 0.001)",
+    type = "double"
   )
   
   args <- parser$parse_args()
+  
   return(args)
 }
 
 
-arg_parse_out_R <- function(args) {
-  cat("Reading arguments... \n\n")
+########################################################################
+
+format_annotate_args <- function(args) {
+  message("Formatting arguments for ANNotate function...")
   
-  query_filepath <- args$filepath
-  feature_names_col <- args$feature_names_col
-  source_data_dir <- args$source_data_dir
-  features_txt <- args$features_txt
+  # Convert arguments to properly named list for ANNotate
+  formatted_args <- list(
+    # Required arguments
+    filepath = args$filepath,
+    
+    # Optional arguments with parameter names matching ANNotate function
+    feature_names_col = args$feature_names_col,
+    annotation_pipeline = args$annotation_pipeline,
+    eval_batch_size = args$eval_batch_size,
+    normalization_override = args$normalization_override,
+    norm_check_batch_size = args$norm_check_batch_size,
+    output_mode = args$output_mode,
+    refine_labels = args$refine_labels,
+    extract_embeddings = args$extract_embeddings,
+    umap_embeddings = args$umap_embeddings,
+    n_neighbors = args$n_neighbors,
+    n_components = args$n_components,
+    metric = args$metric,
+    min_dist = args$min_dist,
+    umap_lr = args$umap_lr,
+    umap_seed = args$umap_seed,
+    spread = args$spread,
+    verbose = args$verbose,
+    init = args$init,
+    process_obj = args$process_obj,
+    cutoff_abs = args$cutoff_abs,
+    cutoff_frac = args$cutoff_frac    
+    )
   
-  if (args$mode %in% c("independent", "cumulative")) {
-    split_mode <- args$mode
+  # Inform about parsed arguments
+  if (args$verbose) {
+    message("Arguments for ANNotate function:")
+    for (name in names(formatted_args)) {
+      value <- formatted_args[[name]]
+      if (is.null(value)) {
+        message(sprintf("  %s: NULL", name))
+      } else if (is.logical(value) || is.numeric(value)) {
+        message(sprintf("  %s: %s", name, value))
+      } else {
+        message(sprintf("  %s: '%s'", name, value))
+      }
+    }
+  }
+  
+  return(formatted_args)
+}
+
+
+########################################################################
+############################ main executable function ##################
+
+ANNotate_R <- function() {
+  # Parse command line arguments
+  args <- parse_annotate_args()
+  formatted_args <- format_annotate_args(args)
+  
+  # Check if running interactively or from command line
+  is_interactive <- interactive()
+  
+  if (!is_interactive) {
+    message("ANNotate_R is being executed from the command line...")
   } else {
-    stop("Mode should either be 'independent' or 'cumulative'")
+    message("ANNotate_R is being run interactively.")
   }
   
-  model <- args$model
-  loss_name <- args$loss
-  epochs <- args$epochs
-  train_seed <- args$train_seed
-  data_seed <- args$data_seed
-  data_source <- args$data_source
-  data_split <- args$data_split
-  mask_seed <- args$mask_seed
-  tm_frac <- args$tail_mask
-  lm_frac <- args$single_level_mask
-  save <- TRUE  
-  batch_size <- args$batch_size
-  eval_batch_size <- args$eval_batch_size
-  optimizer_name <- args$optimizer
-  lr <- args$lr
-  l1 <- args$l1
-  l2 <- args$l2
-  dropout <- args$dropout
-  normalization_override <- args$normalization_override
+  # Extract filepath and read the Seurat object
+  filepath <- formatted_args$filepath
+  assay_name <- 'RNA'
   
-  embeddings_mode <- args$embeddings
-  if_knn_scores <- args$knn_scores
-  if_umap_embeddings <- args$umap_embeddings
-  if_refine_labels <- args$if_refine_labels
-  n_neighbors <- args$n_neighbors
-  n_components <- args$n_components
-  metric <- args$metric
-  min_dist <- args$min_dist
-  umap_lr <- args$umap_lr
-  umap_seed <- args$umap_seed
-  spread <- args$spread
-  verbose <- args$umap_verbose
-  init <- args$umap_init
+  message(paste("Reading Seurat object from", filepath))
+  query_obj <- read_seurat_object(filepath, assay_name)
   
-  object_disk <- args$object_disk
-  out_file_disk <- args$out_file_disk
-  process_obj <- args$process_obj
-  cutoff_abs <- args$cutoff_abs
-  cutoff_frac <- args$cutoff_frac
+  # Filter arguments to only include those expected by ANNotate
+  # Get ANNotate function arguments
+  annotate_args <- formals(ANNotate)
+  annotate_arg_names <- names(annotate_args)
   
-  arguments <- list(
-    query_filepath, 
-    feature_names_col,
-    source_data_dir,
-    features_txt,
-    split_mode,
-    model,
-    loss_name,
-    epochs,
-    train_seed,
-    data_seed,
-    data_source,
-    data_split,
-    mask_seed,
-    tm_frac,
-    lm_frac,
-    save,
-    batch_size,
-    eval_batch_size,
-    optimizer_name,
-    lr,
-    l1,
-    l2,
-    dropout,
-    normalization_override,
-    embeddings_mode,
-    if_knn_scores,
-    if_umap_embeddings,
-    if_refine_labels,
-    n_neighbors,
-    n_components,
-    metric,
-    min_dist,
-    umap_lr,
-    umap_seed,
-    spread,
-    verbose,
-    init,
-    object_disk,
-    out_file_disk,
-    process_obj,
-    cutoff_abs,
-    cutoff_frac
-  )
+  # Filter formatted_args to only include arguments that ANNotate expects
+  args_for_annotate <- formatted_args[names(formatted_args) %in% annotate_arg_names]
   
-  return(arguments)
-}
-
-
-annotate_R <- function(){
+  # Add query_obj to the arguments
+  args_for_annotate$query_obj <- query_obj
   
-  #### parsing arguments
-  cat("\n")
+  # Extract filepath from arguments
+  filepath <- formatted_args$filepath
   
+  # Call ANNotate function with the filtered arguments
+  message("Running ANNotate function...")
+  annotated_obj <- do.call(ANNotate, args_for_annotate)
   
-  args <- arg_parse_in_R()
+  # Save the annotated object
+  save_seurat_object(seurat_obj = annotated_obj, filepath = filepath)
   
-  #### reading parsed arguments
-  arguments <- arg_parse_out_R(args)
-  
-  query_filepath <- arguments[[1]]
-  feature_names_col <- arguments[[2]]
-  source_data_dir <- arguments[[3]]
-  features_txt <- arguments[[4]]
-  split_mode <- arguments[[5]]
-  model <- arguments[[6]]
-  loss_name <- arguments[[7]]
-  epochs <- arguments[[8]]
-  train_seed <- arguments[[9]]
-  data_seed <- arguments[[10]]
-  data_source <- arguments[[11]]
-  data_split <- arguments[[12]]
-  mask_seed <- arguments[[13]]
-  tm_frac <- arguments[[14]]
-  lm_frac <- arguments[[15]]
-  save <- arguments[[16]]
-  batch_size <- arguments[[17]]
-  eval_batch_size <- arguments[[18]]
-  optimizer_name <- arguments[[19]]
-  lr <- arguments[[20]]
-  l1 <- arguments[[21]]
-  l2 <- arguments[[22]]
-  dropout <- arguments[[23]]
-  normalization_override <- arguments[[24]]
-  embeddings_mode <- arguments[[25]]
-  if_knn_scores <- arguments[[26]]
-  if_umap_embeddings <- arguments[[27]]
-  if_refine_labels <- arguments[[28]]
-  n_neighbors <- arguments[[29]]
-  n_components <- arguments[[30]]
-  metric <- arguments[[31]]
-  min_dist <- arguments[[32]]
-  umap_lr <- arguments[[33]]
-  umap_seed <- arguments[[34]]
-  spread <- arguments[[35]]
-  verbose <- arguments[[36]]
-  init <- arguments[[37]]
-  object_disk <- arguments[[38]]
-  out_file_disk <- FALSE
-  process_obj <- arguments[[39]]
-  cutoff_abs <- arguments[[40]]
-  cutoff_frac <- arguments[[41]]
-  
-  #### reading the seurat object 
-  query <- read_obj_R(query_filepath, feature_names_col)
-  X_query <- sp$csr_matrix(r_to_py(query$X_query))
-  query_features <- query$query_features
-  query_cells_df <- query$query_cells_df
-  query_obj <- query$query_obj
-  
-  
-  #### reading the seurat object 
-  query <- read_obj_min(query_obj, feature_names_col)
-  X_query <- sp$csr_matrix(r_to_py(query$X_query))
-  query_features <- query$query_features
-  query_cells_df <- query$query_cells_df
-
-  
-  
-  
-  #### run annotate_core
-  core_outputs <- annotate$annotate_core(
-    X_query,
-    query_features,
-    source_data_dir,
-    features_txt,
-    split_mode,
-    model,
-    epochs,
-    train_seed,
-    loss_name,
-    data_seed,
-    data_source,
-    data_split,
-    mask_seed,
-    tm_frac,
-    lm_frac,
-    batch_size,
-    optimizer_name,
-    lr,
-    l1,
-    l2, 
-    dropout,
-    save,
-    eval_batch_size,
-    normalization_override,
-    embeddings_mode,
-    query_cells_df,
-    if_knn_scores,
-    if_umap_embeddings,
-    if_refine_labels,
-    n_neighbors, 
-    n_components, 
-    metric, 
-    min_dist, 
-    umap_lr, 
-    umap_seed, 
-    spread,
-    verbose,
-    init
-  )
-  
-  
-  embeddings_mode <- core_outputs[[3]]
-  embeddings_dict <- core_outputs[[4]]
-  query_cells_df <- core_outputs[[10]]
-  if_umap_embeddings <- core_outputs[[11]]
-  umap_embeddings_dict <- core_outputs[[12]]
-  
-  annotated_obj = package_obj(embeddings_mode, embeddings_dict, if_umap_embeddings, umap_embeddings_dict, query_cells_df, query_obj)
-  
-  # this is a joke about massively dieting the object
-  # so that we don't redownload expression or embeddingdata
-  # in this API case we know the object has an RNA assay with counts and data layers
-  keto_object=TRUE
-  if (keto_object) {
-    if ("data" %in% names(annotated_obj[["RNA"]]@layers)){
-      annotated_obj[["RNA"]]$data <- Matrix(0, nrow=nrow(annotated_obj[["RNA"]]$data),ncol=ncol(annotated_obj[["RNA"]]$data))
-    }
-    if ("counts" %in% names(annotated_obj[["RNA"]]@layers)){
-      annotated_obj[["RNA"]]$counts <- Matrix(0, nrow=nrow(annotated_obj[["RNA"]]$counts),ncol=ncol(annotated_obj[["RNA"]]$counts))
-    }
-    if ("ANNshallow_embeddings" %in% names(annotated_obj@reductions)){
-      annotated_obj[["ANNshallow_embeddings"]] <- NULL
-    }
-  }
-  if (object_disk){
-    dir_path <- dirname(query_filepath)
-    file_name <- basename(query_filepath)
-    file_name_ann <- sub("\\.rds$", "_ANN.rds", file_name)
-    new_path <- file.path(dir_path, file_name_ann)
-    message("Saving annotated object to ", new_path)
-    saveRDS(annotated_obj, file = new_path)
-  }
-  
+  # Return the annotated object
+  message("ANNotate_R completed successfully.")
   return(annotated_obj)
-  
 }
 
-
-
-
-args <- commandArgs(trailingOnly = TRUE)
-
-if (length(args) > 0) {
-  cat("\n")
-  cat("ANNotate_R is executed from the terminal...")
-  annotate_R() 
-} else {
-  cat("\n")
-  cat("ANNotate_R is being run interactively.")
+# Execute the main function if run from command line
+if (!interactive()) {
+  ANNotate_R()
 }
