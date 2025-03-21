@@ -7,6 +7,7 @@ import psutil
 from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
+import requests
 
 app = Flask(__name__)
 
@@ -153,15 +154,55 @@ def progress_stream(input_file, output_file, logger):
         yield f"data: {json.dumps({'error': error_message})}\n\n"
         logger.error(f"Exception occurred: {error_message}")
 
+def is_private_ip(ip_address):
+    """Check if an IP address is private"""
+    private_patterns = [
+        '10.',      # 10.0.0.0/8
+        '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.',
+        '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.',  # 172.16.0.0/12
+        '192.168.',  # 192.168.0.0/16
+    ]
+    return any(ip_address.startswith(pattern) for pattern in private_patterns)
+
+def get_location_info(ip_address):
+    """Get location information for an IP address"""
+    if is_private_ip(ip_address):
+        network_segment = ip_address.split('.')[0]
+        if network_segment == '10':
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '10.x.x.x Range'}
+        elif network_segment == '172':
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '172.16-31.x.x Range'}
+        elif network_segment == '192':
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '192.168.x.x Range'}
+    
+    try:
+        response = requests.get(f'http://ip-api.com/json/{ip_address}')
+        if response.status_code == 200:
+            data = response.json()
+            if data['status'] == 'success':
+                return {
+                    'country': data.get('country', 'Unknown'),
+                    'city': data.get('city', 'Unknown'),
+                    'region': data.get('regionName', 'Unknown')
+                }
+    except Exception as e:
+        print(f"Error getting location info: {str(e)}")
+    return {'country': 'Unknown', 'city': 'Unknown', 'region': 'Unknown'}
+
 # Main route to handle RDS upload and processing
 @app.route('/process_rds', methods=['POST'])
 def process_rds():
     # Get client IP address
     ip_address = request.remote_addr
     
+    # Get location information
+    location = get_location_info(ip_address)
+    print(f"New API call from IP: {ip_address}")
+    print(f"Location: {location['city']}, {location['region']}, {location['country']}")
+    
     # Setup logger for this request
     logger = setup_logger(ip_address)
-    logger.info(f"New request from IP: {ip_address}")
+    logger.info(f"New request from IP: {ip_address} ({location['city']}, {location['region']}, {location['country']})")
     
     # Check system resources first
     resources_ok, resource_info = check_system_resources()
