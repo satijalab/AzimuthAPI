@@ -188,11 +188,11 @@ def get_location_info(ip_address):
     if is_private_ip(ip_address):
         network_segment = ip_address.split('.')[0]
         if network_segment == '10':
-            return {'country': 'Internal Network', 'city': 'Local', 'region': '10.x.x.x Range'}
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '10.x.x.x Range', 'org': 'Private Network'}
         elif network_segment == '172':
-            return {'country': 'Internal Network', 'city': 'Local', 'region': '172.16-31.x.x Range'}
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '172.16-31.x.x Range', 'org': 'Private Network'}
         elif network_segment == '192':
-            return {'country': 'Internal Network', 'city': 'Local', 'region': '192.168.x.x Range'}
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '192.168.x.x Range', 'org': 'Private Network'}
     
     try:
         response = requests.get(f'http://ip-api.com/json/{ip_address}')
@@ -202,11 +202,12 @@ def get_location_info(ip_address):
                 return {
                     'country': data.get('country', 'Unknown'),
                     'city': data.get('city', 'Unknown'),
-                    'region': data.get('regionName', 'Unknown')
+                    'region': data.get('regionName', 'Unknown'),
+                    'org': data.get('org', 'Unknown')
                 }
     except Exception as e:
         print(f"Error getting location info: {str(e)}")
-    return {'country': 'Unknown', 'city': 'Unknown', 'region': 'Unknown'}
+    return {'country': 'Unknown', 'city': 'Unknown', 'region': 'Unknown', 'org': 'Unknown'}
 
 # Main route to handle RDS upload and processing
 @app.route('/process_rds', methods=['POST'])
@@ -222,11 +223,12 @@ def process_rds():
         location = get_location_info(ip_address)
         print(f"New API call from IP: {ip_address}")
         print(f"Location: {location['city']}, {location['region']}, {location['country']}")
+        print(f"Organization: {location['org']}")
         print(f"Current concurrent requests: {current_requests}")
         
         # Setup logger for this request
         logger = setup_logger(ip_address)
-        logger.info(f"New request from IP: {ip_address} ({location['city']}, {location['region']}, {location['country']})")
+        logger.info(f"New request from IP: {ip_address} ({location['city']}, {location['region']}, {location['country']}, Org: {location['org']})")
         logger.info(f"Concurrent requests: {current_requests}")
         
         # Check system resources first
