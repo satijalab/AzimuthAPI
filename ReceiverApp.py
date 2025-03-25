@@ -7,8 +7,87 @@ import psutil
 from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
+import requests
+import threading
+from werkzeug.exceptions import HTTPException
+import uuid
 
 app = Flask(__name__)
+
+# Global counter for concurrent requests
+request_counter = 0
+request_lock = threading.Lock()
+# Track which requests are active
+active_requests = {}  # Changed from set to dict to track cleanup status
+active_requests_lock = threading.Lock()
+
+def increment_counter():
+    global request_counter
+    with request_lock:
+        request_counter += 1
+        current_count = request_counter
+    return current_count
+
+def decrement_counter():
+    global request_counter
+    with request_lock:
+        if request_counter > 0:  # Safety check
+            request_counter -= 1
+            current_count = request_counter
+        else:
+            current_count = 0
+    return current_count
+
+def generate_request_id():
+    """Generate a unique request ID"""
+    return str(uuid.uuid4())
+
+def mark_request_active():
+    """Mark the current request as active"""
+    with active_requests_lock:
+        request_id = generate_request_id()
+        ip = request.environ.get('REMOTE_ADDR', 'unknown')
+        active_requests[request_id] = {
+            'ip': ip,
+            'cleaned_up': False,
+            'timestamp': datetime.now()
+        }
+        return request_id
+
+def mark_request_complete(request_id):
+    """Mark the current request as complete and decrement counter if needed"""
+    with active_requests_lock:
+        if request_id in active_requests and not active_requests[request_id]['cleaned_up']:
+            active_requests[request_id]['cleaned_up'] = True
+            ip = active_requests[request_id]['ip']
+            decrement_counter()
+            print(f"Request {request_id} from {ip} cleaned up. Current requests: {request_counter}")
+
+def cleanup_old_requests():
+    """Clean up the tracking dict periodically"""
+    with active_requests_lock:
+        now = datetime.now()
+        for request_id in list(active_requests.keys()):
+            if active_requests[request_id]['cleaned_up'] or \
+               (now - active_requests[request_id]['timestamp']).total_seconds() > 3600:  # 1 hour timeout
+                del active_requests[request_id]
+
+@app.teardown_request
+def cleanup_request(error=None):
+    """Only clean up if this is a non-streaming request"""
+    if not request.environ.get('wsgi.multithread', False):
+        # This is a regular (non-streaming) request
+        request_id = request.environ.get('request_id')
+        if request_id:
+            mark_request_complete(request_id)
+            cleanup_old_requests()
+
+@app.before_request
+def track_request():
+    """Track new requests"""
+    if request.endpoint == 'process_rds':
+        request_id = mark_request_active()
+        request.environ['request_id'] = request_id
 
 def setup_logger(ip_address):
     """Setup a logger for the current request"""
@@ -153,55 +232,120 @@ def progress_stream(input_file, output_file, logger):
         yield f"data: {json.dumps({'error': error_message})}\n\n"
         logger.error(f"Exception occurred: {error_message}")
 
+def is_private_ip(ip_address):
+    """Check if an IP address is private"""
+    private_patterns = [
+        '10.',      # 10.0.0.0/8
+        '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.',
+        '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.',  # 172.16.0.0/12
+        '192.168.',  # 192.168.0.0/16
+    ]
+    return any(ip_address.startswith(pattern) for pattern in private_patterns)
+
+def get_location_info(ip_address):
+    """Get location information for an IP address"""
+    if is_private_ip(ip_address):
+        network_segment = ip_address.split('.')[0]
+        if network_segment == '10':
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '10.x.x.x Range', 'org': 'Private Network'}
+        elif network_segment == '172':
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '172.16-31.x.x Range', 'org': 'Private Network'}
+        elif network_segment == '192':
+            return {'country': 'Internal Network', 'city': 'Local', 'region': '192.168.x.x Range', 'org': 'Private Network'}
+    
+    try:
+        response = requests.get(f'http://ip-api.com/json/{ip_address}')
+        if response.status_code == 200:
+            data = response.json()
+            if data['status'] == 'success':
+                return {
+                    'country': data.get('country', 'Unknown'),
+                    'city': data.get('city', 'Unknown'),
+                    'region': data.get('regionName', 'Unknown'),
+                    'org': data.get('org', 'Unknown')
+                }
+    except Exception as e:
+        print(f"Error getting location info: {str(e)}")
+    return {'country': 'Unknown', 'city': 'Unknown', 'region': 'Unknown', 'org': 'Unknown'}
+
 # Main route to handle RDS upload and processing
 @app.route('/process_rds', methods=['POST'])
 def process_rds():
-    # Get client IP address
-    ip_address = request.remote_addr
+    # Get the request ID set by before_request
+    request_id = request.environ.get('request_id')
     
-    # Setup logger for this request
-    logger = setup_logger(ip_address)
-    logger.info(f"New request from IP: {ip_address}")
+    # Increment request counter and get current count
+    current_requests = increment_counter()
     
-    # Check system resources first
-    resources_ok, resource_info = check_system_resources()
-    if not resources_ok:
-        logger.warning(f"System resources check failed: CPU {resource_info['cpu_usage']}%, Memory {resource_info['memory_usage']}%")
-        return Response(progress_stream_error(resource_info, logger), content_type='text/event-stream')
-
-    if 'file' not in request.files:
-        logger.error("No file part in request")
-        return Response("No file part in request", status=400)
-
-    file = request.files['file']
-    if file.filename == '':
-        logger.error("No selected file")
-        return Response("No selected file", status=400)
-
-    # Save the uploaded RDS file
-    input_file = f"/tmp/{file.filename}"
-    output_file = input_file.replace(".rds", "_ANN.rds")
-    logger.info(f"Saving file to: {input_file}")
-    file.save(input_file)
-
     try:
-        # Stream progress updates
-        return Response(progress_stream(input_file, output_file, logger), content_type='text/event-stream')
+        # Get client IP address
+        ip_address = request.remote_addr
+        
+        # Get location information
+        location = get_location_info(ip_address)
+        print(f"New API call from IP: {ip_address}")
+        print(f"Location: {location['city']}, {location['region']}, {location['country']}")
+        print(f"Organization: {location['org']}")
+        print(f"Current concurrent requests: {current_requests}")
+        
+        # Setup logger for this request
+        logger = setup_logger(ip_address)
+        logger.info(f"New request from IP: {ip_address} ({location['city']}, {location['region']}, {location['country']}, Org: {location['org']})")
+        logger.info(f"Concurrent requests: {current_requests}")
+        
+        # Check system resources first
+        resources_ok, resource_info = check_system_resources()
+        if not resources_ok:
+            logger.warning(f"System resources check failed: CPU {resource_info['cpu_usage']}%, Memory {resource_info['memory_usage']}%")
+            mark_request_complete(request_id)
+            return Response(progress_stream_error(resource_info, logger), content_type='text/event-stream')
+
+        if 'file' not in request.files:
+            logger.error("No file part in request")
+            mark_request_complete(request_id)
+            return Response("No file part in request", status=400)
+
+        file = request.files['file']
+        if file.filename == '':
+            logger.error("No selected file")
+            mark_request_complete(request_id)
+            return Response("No selected file", status=400)
+
+        # Save the uploaded RDS file
+        input_file = f"/tmp/{file.filename}"
+        output_file = input_file.replace(".rds", "_ANN.rds")
+        logger.info(f"Saving file to: {input_file}")
+        file.save(input_file)
+
+        def generate():
+            try:
+                for chunk in progress_stream(input_file, output_file, logger):
+                    yield chunk
+            except GeneratorExit:  # This is raised when the client disconnects
+                print(f"Client disconnected from {ip_address}")
+                logger.warning("Client disconnected during streaming")
+                mark_request_complete(request_id)
+                raise
+            finally:
+                mark_request_complete(request_id)
+                remaining_requests = request_counter
+                print(f"Request completed/terminated. Current concurrent requests: {remaining_requests}")
+                logger.info(f"Request completed/terminated. Current concurrent requests: {remaining_requests}")
+
+        return Response(generate(), content_type='text/event-stream')
+        
     except Exception as e:
         logger.error(f"Error during processing: {e}")
+        mark_request_complete(request_id)
         return Response(json.dumps({'error': str(e)}), content_type='application/json', status=500)
 
 # Route to download the output file
 @app.route('/download_output', methods=['GET'])
 def download_output():
     # Get client IP address and setup logger
-    ip_address = request.remote_addr
-    logger = setup_logger(ip_address)
-    logger.info(f"Download request from IP: {ip_address}")
-    
+    ip_address = request.remote_addr    
     output_file = request.args.get('output_file')
     if not output_file or not os.path.exists(output_file):
-        logger.error(f"Output file not found: {output_file}")
         return Response("Output file not found", status=404)
     
     try:
@@ -212,14 +356,11 @@ def download_output():
         # Copy the file
         import shutil
         shutil.copy2(output_file, log_filename)
-        logger.info(f"Copied output file to logs: {log_filename}")
         
         # Return the original file to the user
-        logger.info(f"Returning output file to user: {output_file}")
         return send_file(output_file, as_attachment=True)
     except Exception as e:
         error_message = f"Error copying file to logs: {str(e)}"
-        logger.error(error_message)
         return Response(error_message, status=500)
 
 if __name__ == '__main__':

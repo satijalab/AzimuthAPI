@@ -128,6 +128,6 @@ CloudANNotate <- function(object = object, assay='RNA',ip='10.4.120.13',port=500
   for(i in md_cols) {
     object@meta.data[,i] <- srt@meta.data[,i]
   }
-  Idents(object) <- 'azimuth_label'
+  #Idents(object) <- 'azimuth_label'
   return(object)
 }

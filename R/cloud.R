@@ -38,11 +38,11 @@ CloudANNotate <- function(object = object, assay = 'RNA', ip = '10.4.120.13',
   
   process_rds_file(api_base_url, tmp_input)
   srt <- readRDS(file = tmp_output)
-  srt <- PrepLabel(srt, 
-                  label_id = 'final_level_label', 
-                  cutoff = max(5, 0.001 * ncol(srt)), 
-                  cutid = 'Other', 
-                  newid = 'azimuth_label')
+  #srt <- PrepLabel(srt, 
+  #                label_id = 'final_level_label', 
+  #                cutoff = max(5, 0.001 * ncol(srt)), 
+  #                cutid = 'Other', 
+  #                newid = 'azimuth_label')
   
   # Copy reductions
   for (i in names(srt@reductions)) {
