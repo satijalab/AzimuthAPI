@@ -13,18 +13,19 @@ make_QC_heatmap <- function(
     n_markers = 10, 
     text.size=3, 
     text.angle=90, 
-    min_size=NULL, 
-    max_size=NULL, 
+    min.size = NULL, #SKYLAR: Proposed change from _ to . to make parameter names consistent
+    max.size = NULL, 
     min.pct=0.1, 
     reorder = TRUE, 
-    switch_id=NULL
+    switch_id=NULL,
+    identity = "" #SKYLAR: To pass identity name to image save path
 ) {
   if (!is.null(group.by)) Idents(seurat_obj) <- group.by
-  if (!is.null(min_size)) {
-    seurat_obj <- subset(seurat_obj,idents = names(which(table(Idents(seurat_obj))>=min_size)))
+  if (!is.null(min.size)) {
+    seurat_obj <- subset(seurat_obj,idents = names(which(table(Idents(seurat_obj))>=min.size)))
   }
-  if (!is.null(max_size)) {
-    seurat_obj <- subset(seurat_obj,idents = names(which(table(Idents(seurat_obj))<=max_size)))
+  if (!is.null(max.size)) {
+    seurat_obj <- subset(seurat_obj,idents = names(which(table(Idents(seurat_obj))<=max.size)))
   }
   if (!is.null(n_downsample)) seurat_obj <- subset(seurat_obj, downsample=n_downsample)
   mark_all <- FindAllMarkers(seurat_obj,only.pos = TRUE,min.pct = min.pct)
@@ -72,20 +73,23 @@ make_QC_heatmap <- function(
   plot_heatmap <- DoHeatmap(seurat_obj,features = top_markers$gene,cells = cells.plot,size = 4, angle = text.angle)+theme(
     axis.text.y = element_text(size = text.size)) + NoLegend()
   if (!is.null(save_folder_path))  ggsave(paste0(save_folder_path, identity, "_heatmap.png"))
-  if (is.null(save_folder_path))return(plot_heatmap)
+  #SKYLAR: Proposed change to return plots regardless of saving pngs 
+  #if (is.null(save_folder_path))return(plot_heatmap)
+  return(plot_heatmap)
 }
 
 make_azimuth_QC_heatmaps <- function(
     object, 
-    final_name = 'annotate_fine', 
-    level1_name = 'cell_type_label_level_1', 
-    level2_name = 'cell_type_label_level_2',
-    min_final_group = 10, 
-    max.ids.per.group = 10,...
+    final_name = 'azimuth_fine', 
+    level1_name = 'level_zero_labels', # SKYLAR: Should this parameter name be adjusted to avoid confusion? 
+    full_name = 'full_hierarchical_labels', # SKYLAR: Since level 2 is removed from default ANNotate output, pass in full label instead?
+    min.final.group = 10,  #SKYLAR: Proposed change from _ to . to ensure name consistency
+    max.ids.per.plot = 10, # SKYLAR: Proposed name change to avoid confusion between group vs plot with min.final.group
+    ...
 ) {
   # Ensure the required columns exist
-  required_columns <- c(level1_name,level2_name,final_name)
-  if (!all(required_columns %in% colnames(seurat_obj@meta.data))) {
+  required_columns <- c(level1_name,full_name,final_name)
+  if (!all(required_columns %in% colnames(object@meta.data))) { #SKYLAR: Proposed fix
     stop("The Seurat object is missing required metadata.")
   }
   
@@ -93,16 +97,22 @@ make_azimuth_QC_heatmaps <- function(
   metadata <- object@meta.data
   
   # filter non-concordant
-  metadata <- subset(metadata, cell_type_in_database==TRUE)
+  # SKYLAR: Proposed fix due to ANNotate metadata column name change
+  metadata <- subset(metadata, full_consistent_hierarchy==TRUE)
+
+  # SKYLAR: Proposed fix since level 2 no longer exists in default ANNotate metadata output 
+  level2_name = 'level_two_labels'
+  metadata[, level2_name] <- sapply(strsplit(metadata[, full_name], "\\|"), function(x) ifelse(length(x) > 1, x[2], ""))
   
-  abundance_filter_pass <- names(which(table(metadata[,level2_name])>min_final_group))
-  metadata <- metadata[which(metadata[,level2_name]%in%abundance_filter_pass),]
+  # SKYLAR: Proposed fix to filter out min groups by final labels instead of level 2 labels
+  abundance_filter_pass <- names(which(table(metadata[,final_name]) > min.final.group))
+  metadata <- metadata[which(metadata[,final_name] %in% abundance_filter_pass),]
   
   # Adjust first-level grouping: Separate "Immune cell" into "Immune_Lymphoid" and "Immune_Myeloid"
   metadata$adjusted_level_1 <- ifelse(
     metadata[,level1_name] == "Immune cell" & metadata[,level2_name] %in% c("Myeloid cell","Lymphoid cell"),
     paste0("Immune_", metadata[,level2_name]),
-    metadata[,level1_name]
+    as.character(metadata[,level1_name]) #SKYLAR: Proposed fix
   )
   
   # anything that doesn't fit (i.e. erythroid) goes into myeloid category
@@ -119,34 +129,43 @@ make_azimuth_QC_heatmaps <- function(
     # Split by second level
     second_level_groups <- split(subset_df, subset_df[,final_name])
     
-    # Remove groups that do not meet the min_final_group threshold
-    second_level_groups <- second_level_groups[sapply(second_level_groups, nrow) >= min_final_group]
+    # Remove groups that do not meet the min.final.group threshold
+    second_level_groups <- second_level_groups[sapply(second_level_groups, nrow) >= min.final.group]
     
     # Check if more than 10 groups and split further
     second_level_names <- names(sort(unlist(lapply(second_level_groups,nrow)),decreasing = TRUE))
     num_levels <- length(second_level_names)
     
-    if (num_levels > max.ids.per.group) {
-      num_splits <- ceiling(num_levels / max.ids.per.group)
-      split_indices <- rep(1:num_splits, each = max.ids.per.group, length.out = num_levels)
+    # SKYLAR: Proposed change to handle max.ids.per.plot as NULL
+    if (is.null(max.ids.per.plot) || num_levels <= max.ids.per.plot) {
+        if (num_levels > 0) {
+            group_name <- paste0(level1, "_1") # If only one group, assign "_1" suffix
+            result_list[[group_name]] <- subset_df
+        }
+    } else {
+      num_splits <- ceiling(num_levels / max.ids.per.plot)
+      split_indices <- rep(1:num_splits, each = max.ids.per.plot, length.out = num_levels)
       
       for (split_idx in unique(split_indices)) {
         selected_labels <- second_level_names[split_indices == split_idx]
         group_name <- paste0(level1, "_", split_idx) # Naming convention: "level1_1", "level1_2", etc.
         result_list[[group_name]] <- subset_df[subset_df[,final_name] %in% selected_labels, ]
       }
-      
-    } else if (num_levels > 0) {
-      group_name <- paste0(level1, "_1") # If only one group, assign "_1" suffix
-      result_list[[group_name]] <- subset_df
-    }
+    } 
   }
+
+  # SKYLAR: Proposing additional code to enable passing in the metadata colname containing values to order by, instead of a list of cell names
+  #  if(!is.null(cells.order) && length(cells.order) == 1){
+  #      cells.order <- rownames(seurat_obj[[]])[order(seurat_obj[[]][[cells.order]])]
+  #  } 
+
   plot_list <- list()
   for (level1 in names(result_list)) {
     lobj <- subset(object,cells = rownames(result_list[[level1]]))
     Idents(lobj) <- final_name
     tryCatch({
-      plot_list[[level1]] <- make_QC_heatmap(lobj,min_size = min_final_group, ...)
+      # SKYLAR: Proposed change to pass level1 name as identity for save_folder_path
+      plot_list[[level1]] <- make_QC_heatmap(lobj, min.size = min.final.group, identity = as.character(level1), ...)
     }, error = function(e) {
       message(paste("Error in processing", level1, ":", e$message))
     })
