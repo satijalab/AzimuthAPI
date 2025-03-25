@@ -11,6 +11,8 @@ export(process_azimuth_results)
 export(read_obj_min)
 export(run_azimuth_api)
 export(setup_conda_env)
+export(make_QC_heatmap)
+export(make_azimuth_QC_heatmaps)
 
 importFrom(httr, POST)
 importFrom(httr, GET)
