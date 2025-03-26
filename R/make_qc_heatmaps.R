@@ -11,7 +11,7 @@ make_QC_heatmap <- function(
     save_folder_path = NULL, 
     logfc_cutoff = log(2), 
     n_markers = 10, 
-    text.size=3, 
+    text.size=5, 
     text.angle=90, 
     min.size = NULL, #SKYLAR: Proposed change from _ to . to make parameter names consistent
     max.size = NULL, 
@@ -70,7 +70,7 @@ make_QC_heatmap <- function(
   
   cells.plot <- names(which(!is.na(Idents(seurat_obj))))
   if (!is.null(cells.order)) cells.plot <- intersect(cells.order,cells.plot)
-  plot_heatmap <- DoHeatmap(seurat_obj,features = top_markers$gene,cells = cells.plot,size = 4, angle = text.angle)+theme(
+  plot_heatmap <- DoHeatmap(seurat_obj,features = top_markers$gene,cells = cells.plot, size = 3.5, angle = text.angle)+theme(
     axis.text.y = element_text(size = text.size)) + NoLegend()
   if (!is.null(save_folder_path))  ggsave(paste0(save_folder_path, identity, "_heatmap.png"))
   #SKYLAR: Proposed change to return plots regardless of saving pngs 
