@@ -10,7 +10,7 @@
 #' @importFrom RCurl url.exists
 #' @export
 CloudANNotate <- function(object = object, assay = 'RNA', ip = '10.4.120.13', 
-                         port = 5000, normalize = FALSE) {
+                         port = 5000) {
   message("Running Pan-Human Azimuth on the cloud!")
   
 
