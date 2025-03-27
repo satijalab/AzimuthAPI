@@ -13,13 +13,18 @@ CloudANNotate <- function(object = object, assay = 'RNA', ip = '10.4.120.13',
                          port = 5000, normalize = FALSE) {
   message("Running Pan-Human Azimuth on the cloud!")
   
-  # normalize data to be safe
-  if (normalize) {
-    object <- NormalizeData(object)
-  }
-  
+
+
   layer_name <- 'data'
   data <- LayerData(object, assay = assay, layer = layer_name)
+
+  # check if data has been normalized, just using the first 5 cells
+  # throw an error if large values, or all integer values, are detected
+  data_check <- data[,1:min(5,ncol(data))]
+  if ((max(data_check) > 15) || isTRUE(all.equal(data_check,floor(data_check)))) {
+    stop("Please run NormalizeData on the data before running Azimuth")
+  }
+
   feature_file <- 'https://raw.githubusercontent.com/rsatija/public_utils/refs/heads/main/features_v0.txt'
   
   if (url.exists(feature_file)) {
