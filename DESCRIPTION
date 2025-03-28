@@ -1,8 +1,8 @@
-Package: PanAzimuth
+Package: AzimuthAPI
 Title: Pan-Azimuth Web API Interface
 Version: 0.1.0
 Authors@R: 
-    person("Rahul", "Satija", email = "rahul.satija@nyumc.org", role = c("aut", "cre"))
+    person("Satija", "Lab", email = "satijalabnygc@gmail.com", role = c("aut", "cre"))
 Description: An R package providing an interface to the Pan-Azimuth Web API for single-cell RNA sequencing analysis.
 License: MIT + file LICENSE
 Encoding: UTF-8
