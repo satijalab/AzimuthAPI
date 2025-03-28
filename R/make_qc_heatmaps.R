@@ -13,12 +13,12 @@ make_QC_heatmap <- function(
     n_markers = 10, 
     text.size=5, 
     text.angle=90, 
-    min.size = NULL, #SKYLAR: Proposed change from _ to . to make parameter names consistent
+    min.size = NULL, 
     max.size = NULL, 
     min.pct=0.1, 
     reorder = TRUE, 
     switch_id=NULL,
-    identity = "" #SKYLAR: To pass identity name to image save path
+    identity = "" 
 ) {
   if (!is.null(group.by)) Idents(seurat_obj) <- group.by
   if (!is.null(min.size)) {
@@ -73,18 +73,16 @@ make_QC_heatmap <- function(
   plot_heatmap <- DoHeatmap(seurat_obj,features = top_markers$gene,cells = cells.plot, size = 3.5, angle = text.angle)+theme(
     axis.text.y = element_text(size = text.size)) + NoLegend()
   if (!is.null(save_folder_path))  ggsave(paste0(save_folder_path, identity, "_heatmap.png"))
-  #SKYLAR: Proposed change to return plots regardless of saving pngs 
-  #if (is.null(save_folder_path))return(plot_heatmap)
   return(plot_heatmap)
 }
 
 make_azimuth_QC_heatmaps <- function(
     object, 
     final_name = 'azimuth_fine', 
-    level1_name = 'level_zero_labels', # SKYLAR: Should this parameter name be adjusted to avoid confusion? 
-    full_name = 'full_hierarchical_labels', # SKYLAR: Since level 2 is removed from default ANNotate output, pass in full label instead?
-    min.final.group = 10,  #SKYLAR: Proposed change from _ to . to ensure name consistency
-    max.ids.per.plot = 10, # SKYLAR: Proposed name change to avoid confusion between group vs plot with min.final.group
+    level1_name = 'azimuth_broad', 
+    full_name = 'full_hierarchical_labels', 
+    min.final.group = 10, 
+    max.ids.per.plot = 10, 
     ...
 ) {
   # Ensure the required columns exist
@@ -100,11 +98,9 @@ make_azimuth_QC_heatmaps <- function(
   # SKYLAR: Proposed fix due to ANNotate metadata column name change
   metadata <- subset(metadata, full_consistent_hierarchy==TRUE)
 
-  # SKYLAR: Proposed fix since level 2 no longer exists in default ANNotate metadata output 
   level2_name = 'level_two_labels'
   metadata[, level2_name] <- sapply(strsplit(metadata[, full_name], "\\|"), function(x) ifelse(length(x) > 1, x[2], ""))
   
-  # SKYLAR: Proposed fix to filter out min groups by final labels instead of level 2 labels
   abundance_filter_pass <- names(which(table(metadata[,final_name]) > min.final.group))
   metadata <- metadata[which(metadata[,final_name] %in% abundance_filter_pass),]
   
@@ -136,7 +132,6 @@ make_azimuth_QC_heatmaps <- function(
     second_level_names <- names(sort(unlist(lapply(second_level_groups,nrow)),decreasing = TRUE))
     num_levels <- length(second_level_names)
     
-    # SKYLAR: Proposed change to handle max.ids.per.plot as NULL
     if (is.null(max.ids.per.plot) || num_levels <= max.ids.per.plot) {
         if (num_levels > 0) {
             group_name <- paste0(level1, "_1") # If only one group, assign "_1" suffix
@@ -154,17 +149,15 @@ make_azimuth_QC_heatmaps <- function(
     } 
   }
 
-  # SKYLAR: Proposing additional code to enable passing in the metadata colname containing values to order by, instead of a list of cell names
-  #  if(!is.null(cells.order) && length(cells.order) == 1){
-  #      cells.order <- rownames(seurat_obj[[]])[order(seurat_obj[[]][[cells.order]])]
-  #  } 
+   if(!is.null(cells.order) && length(cells.order) == 1){
+       cells.order <- rownames(seurat_obj[[]])[order(seurat_obj[[]][[cells.order]])]
+   } 
 
   plot_list <- list()
   for (level1 in names(result_list)) {
     lobj <- subset(object,cells = rownames(result_list[[level1]]))
     Idents(lobj) <- final_name
     tryCatch({
-      # SKYLAR: Proposed change to pass level1 name as identity for save_folder_path
       plot_list[[level1]] <- make_QC_heatmap(lobj, min.size = min.final.group, identity = as.character(level1), ...)
     }, error = function(e) {
       message(paste("Error in processing", level1, ":", e$message))
