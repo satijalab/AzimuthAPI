@@ -4,17 +4,14 @@
 #' @param assay Name of the assay to use (default: 'RNA')
 #' @param ip IP address of the cloud server (default: '34.222.135.233')
 #' @param port Port number for the API (default: 5000)
-#' @param normalize Whether to normalize the data (default: FALSE)
 #' @return Annotated Seurat object
 #' @importFrom httr POST GET upload_file content status_code
 #' @importFrom RCurl url.exists
 #' @export
-CloudANNotate <- function(object = object, assay = 'RNA', ip = '34.222.135.233', 
+CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233', 
                          port = 5000) {
   message("Running Pan-Human Azimuth on the cloud!")
   
-
-
   layer_name <- 'data'
   data <- LayerData(object, assay = assay, layer = layer_name)
 
@@ -43,11 +40,6 @@ CloudANNotate <- function(object = object, assay = 'RNA', ip = '34.222.135.233',
   
   process_rds_file(api_base_url, tmp_input)
   srt <- readRDS(file = tmp_output)
-  #srt <- PrepLabel(srt, 
-  #                label_id = 'final_level_label', 
-  #                cutoff = max(5, 0.001 * ncol(srt)), 
-  #                cutid = 'Other', 
-  #                newid = 'azimuth_label')
   
   # Copy reductions
   for (i in names(srt@reductions)) {
