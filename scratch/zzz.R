@@ -1,4 +1,4 @@
-.onLoad <- function(libname, pkgname) {
+oldonLoad <- function(libname, pkgname) {
   # Check for required packages
   if (!requireNamespace("reticulate", quietly = TRUE) || 
       packageVersion("reticulate") < "1.40.0") {
