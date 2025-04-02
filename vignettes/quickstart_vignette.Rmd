@@ -1,5 +1,5 @@
 ---
-title: "PanAzimuth Tutorial"
+title: "Azimuth API Tutorial"
 output:
   html_document:
     theme: united
@@ -36,33 +36,28 @@ PanAzimuthWebAPI can be installed from Github using the following commands:
 if (!requireNamespace("devtools", quietly = TRUE)) {
   install.packages("devtools")
 }
-devtools::install_github("rsatija/PanAzimuthWebAPI")
+install_github("satijalab/AzimuthAPI", auth_token = "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")
 ```
+
 # Run ANNotate
 For this vignette, we will demonstrate annotating a dataset of human bone marrow mononuclear (BMNC) cells from eight individual donors produced by the Human Cell Atlas. This dataset is available through SeuratData.
 ```{r load.packages}
 library(Seurat)
 library(SeuratData)
-library(PanAzimuth)
+library(AzimuthAPI)
 ```
 ```{r install.data, eval = FALSE}
 bmcite <- InstallData("bmcite")
 ```
-```{r, include = FALSE}
-# Eventually avoid sourcing since package will export heatmap functions. 
-source("/brahms/lis/PanAzimuthWebAPI/R/make_qc_heatmaps.R") 
-```
+
 ```{r load.data}
 bmcite <- LoadData("bmcite")
 ```
 
-The `CloudANNotate` function runs Pan-human Azimuth cell type predictions on a Seurat object via a cloud-based API deployed on AWS, and returns results stored in the object's cell-level metadata. 
+The `CloudAzimuth` function runs Pan-human Azimuth cell type predictions on a Seurat object via a cloud-based API deployed on AWS, and returns results stored in the object's cell-level metadata. 
 
 ```{r run.panazimuth, results = FALSE}
-bmcite <- CloudANNotate(bmcite,ip = '34.222.135.233')
-```
-```{r}
-bmcite
+bmcite <- CloudAzimuth(bmcite)
 ```
 
 # Visualize predictions
