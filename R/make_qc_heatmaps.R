@@ -18,7 +18,8 @@ make_QC_heatmap <- function(
     min.pct=0.1, 
     reorder = TRUE, 
     switch_id=NULL,
-    identity = "" 
+    identity = "",
+    cells.order = NULL 
 ) {
   if (!is.null(group.by)) Idents(seurat_obj) <- group.by
   if (!is.null(min.size)) {
