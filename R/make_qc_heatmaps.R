@@ -69,7 +69,7 @@ make_QC_heatmap <- function(
       arrange(cluster)
   }
   
-  cells.plot <- names(which(!is.na(Idents(seurat_obj))))
+  cells.plot <- sample(names(which(!is.na(Idents(seurat_obj)))))
   if (!is.null(cells.order)) cells.plot <- intersect(cells.order,cells.plot)
   plot_heatmap <- DoHeatmap(seurat_obj,features = top_markers$gene,cells = cells.plot, size = 3.5, angle = text.angle)+theme(
     axis.text.y = element_text(size = text.size)) + NoLegend()
