@@ -23,16 +23,16 @@ knitr::opts_chunk$set(
   tidy = TRUE,
   tidy.opts = list(width.cutoff = 95),
   fig.align = "center",
-  message = FALSE,
-  warning = FALSE,
+  message = TRUE,
+  warning = TRUE,
   time_it = TRUE,
   error = TRUE
 )
 ```
 
 # Setup the Environment
-PanAzimuthWebAPI can be installed from Github using the following commands:
-```{r install.panazimuth}
+Install the Pan-human Azimuth R API from Github
+```{r install.panazimuth, eval=FALSE}
 devtools::install_github("satijalab/AzimuthAPI", auth_token = "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")
 ```
 
@@ -42,6 +42,7 @@ For this vignette, we will demonstrate annotating a dataset of human bone marrow
 library(Seurat)
 library(SeuratData)
 library(AzimuthAPI)
+library(dplyr)
 ```
 ```{r install.data, eval = FALSE}
 bmcite <- InstallData("bmcite")
@@ -139,12 +140,13 @@ Plots are saved by `azimuth_broad` categories by default, with the exception of 
 
 ```{r make.heatmaps}
 plots <- make_azimuth_QC_heatmaps(bmcite)
+print(length(plots))
 ```
-```{r lymphoid.heatmap, fig.height = 12}
+```{r lymphoid.heatmap, fig.height = 24}
 p8 <- plots[['Immune_Lymphoid cell_1']]
 print(p8)
 ```
-```{r myeloid.heatmap, fig.height = 13}
+```{r myeloid.heatmap, fig.height = 24}
 p9 <- plots[['Immune_Myeloid cell_1']]
 print(p9)
 ```
