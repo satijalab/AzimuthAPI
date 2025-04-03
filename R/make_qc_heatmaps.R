@@ -18,8 +18,7 @@ make_QC_heatmap <- function(
     min.pct=0.1, 
     reorder = TRUE, 
     switch_id=NULL,
-    identity = "",
-    cells.order = NULL 
+    identity = ""
 ) {
   if (!is.null(group.by)) Idents(seurat_obj) <- group.by
   if (!is.null(min.size)) {
@@ -69,7 +68,7 @@ make_QC_heatmap <- function(
       arrange(cluster)
   }
   
-  cells.plot <- sample(names(which(!is.na(Idents(seurat_obj)))))
+  cells.plot <- (names(which(!is.na(Idents(seurat_obj)))))
   if (!is.null(cells.order)) cells.plot <- intersect(cells.order,cells.plot)
   plot_heatmap <- DoHeatmap(seurat_obj,features = top_markers$gene,cells = cells.plot, size = 3.5, angle = text.angle)+theme(
     axis.text.y = element_text(size = text.size)) + NoLegend()
@@ -83,7 +82,7 @@ make_azimuth_QC_heatmaps <- function(
     level1_name = 'azimuth_broad', 
     full_name = 'full_hierarchical_labels', 
     min.final.group = 10, 
-    max.ids.per.plot = 10, 
+    max.ids.per.plot = 15, 
     ...
 ) {
   # Ensure the required columns exist
@@ -149,10 +148,6 @@ make_azimuth_QC_heatmaps <- function(
       }
     } 
   }
-
-   if(!is.null(cells.order) && length(cells.order) == 1){
-       cells.order <- rownames(seurat_obj[[]])[order(seurat_obj[[]][[cells.order]])]
-   } 
 
   plot_list <- list()
   for (level1 in names(result_list)) {
