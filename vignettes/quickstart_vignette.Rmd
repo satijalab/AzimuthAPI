@@ -1,5 +1,5 @@
 ---
-title: "Azimuth API Tutorial"
+title: "Pan-human Azimuth R API Vignette"
 output:
   html_document:
     theme: united
@@ -32,15 +32,12 @@ knitr::opts_chunk$set(
 
 # Setup the Environment
 PanAzimuthWebAPI can be installed from Github using the following commands:
-```{r install.panazimuth, eval = FALSE}
-if (!requireNamespace("devtools", quietly = TRUE)) {
-  install.packages("devtools")
-}
-install_github("satijalab/AzimuthAPI", auth_token = "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")
+```{r install.panazimuth}
+devtools::install_github("satijalab/AzimuthAPI", auth_token = "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")
 ```
 
 # Run ANNotate
-For this vignette, we will demonstrate annotating a dataset of human bone marrow mononuclear (BMNC) cells from eight individual donors produced by the Human Cell Atlas. This dataset is available through SeuratData.
+For this vignette, we will demonstrate annotating a dataset of human bone marrow mononuclear (BMNC) cells that we published as part of (Stuart, Butler et al Cell 2019)[https://www.cell.com/cell/fulltext/S0092-8674(19)30559-8]. This dataset is available through SeuratData.
 ```{r load.packages}
 library(Seurat)
 library(SeuratData)
@@ -56,7 +53,7 @@ bmcite <- LoadData("bmcite")
 
 The `CloudAzimuth` function runs Pan-human Azimuth cell type predictions on a Seurat object via a cloud-based API deployed on AWS, and returns results stored in the object's cell-level metadata. 
 
-```{r run.panazimuth, results = FALSE}
+```{r run.panazimuth, results = FALSE, cache=TRUE}
 bmcite <- CloudAzimuth(bmcite)
 ```
 
@@ -82,6 +79,7 @@ In addition, we include the `full_consistent_hierarchy` flag to indicate whether
 
 ```{r}
 # All cell-level metadata that is returned
+# Note that the first 10 columns existed in the object prior to running Azimuth
 colnames(bmcite[[]])
 ```
 ```{r, include = FALSE}
@@ -144,9 +142,9 @@ plots <- make_azimuth_QC_heatmaps(bmcite)
 ```
 ```{r lymphoid.heatmap, fig.height = 12}
 p8 <- plots[['Immune_Lymphoid cell_1']]
-p8
+print(p8)
 ```
 ```{r myeloid.heatmap, fig.height = 13}
 p9 <- plots[['Immune_Myeloid cell_1']]
-p9
+print(p9)
 ```
