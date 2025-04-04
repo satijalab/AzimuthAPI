@@ -142,11 +142,11 @@ Plots are saved by `azimuth_broad` categories by default, with the exception of 
 plots <- make_azimuth_QC_heatmaps(bmcite)
 print(length(plots))
 ```
-```{r lymphoid.heatmap, fig.height = 24}
+```{r lymphoid.heatmap, fig.height = 12,fig.width=12}
 p8 <- plots[['Immune_Lymphoid cell_1']]
 print(p8)
 ```
-```{r myeloid.heatmap, fig.height = 24}
+```{r myeloid.heatmap, fig.height = 12,fig.width=12}
 p9 <- plots[['Immune_Myeloid cell_1']]
 print(p9)
 ```
