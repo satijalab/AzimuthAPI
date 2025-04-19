@@ -23,12 +23,14 @@ knitr::opts_chunk$set(
   tidy = TRUE,
   tidy.opts = list(width.cutoff = 95),
   fig.align = "center",
-  message = TRUE,
-  warning = TRUE,
+  message = FALSE,
+  warning = FALSE,
   time_it = TRUE,
   error = TRUE
 )
 ```
+
+This vignette demonstrates how to install and run the Pan-human Azimuth R Cloud API. The API takes a Seurat object and returns hierarchical cell type predictions, confidence scores, and a low-dimensional visualization.
 
 # Setup the Environment
 Install the Pan-human Azimuth R API from Github
@@ -59,24 +61,16 @@ bmcite <- CloudAzimuth(bmcite)
 ```
 
 # Visualize predictions
-You can visualize the predicted cell type labels on `azimuthumap`, the UMAP reduction of the embedding that the PanAzimuth model learns on the data based on cell type representation.
 
-For example, below are the original cell type annotations visualized on `azimuthumap`:
-
-```{r orig.labels, fig.width = 9}
-p0 <- DimPlot(bmcite, group.by = "celltype.l1", label.size = 3, repel=T, label=T) + NoLegend()
-p1 <- DimPlot(bmcite, group.by = "celltype.l2", label.size = 3, repel=T, label=T) + NoLegend()
-p0 | p1
-```
+You can visualize the predicted cell type labels on `azimuthumap`, a UMAP visualization of the neural network model's encoding layer.
 
 Pan-human Azimuth returns predictions in multiple formats, as well as softmax probability scores to estimate model confidence:
 
 * `full_hierarchical_labels`: The full predicted label for each cell, where '|' delimits each hierarchical level
 * `level_zero_labels`: The most broad level of the full hierarchical label
 * `final_level_labels`: The most granular level of the full hierarchical label
-* `final_level_softmax_prob`: The model’s predicted probability for each cell’s assigned `final_level_label`, ranging from 0 to 1
-
-In addition, we include the `full_consistent_hierarchy` flag to indicate whether if the full hierarchical label is valid according to our internal cell type hierarchy.
+* `final_level_softmax_p*rob`: The model’s predicted probability for each cell’s assigned `final_level_label`, ranging from 0 to 1
+* `full_consistent_hierarchy`: A flag that indicates whether all levels of the hierarchy are internally consistent 
 
 ```{r}
 # All cell-level metadata that is returned
@@ -84,16 +78,18 @@ In addition, we include the `full_consistent_hierarchy` flag to indicate whether
 colnames(bmcite[[]])
 ```
 ```{r, include = FALSE}
-bmcite <- PrepLabel(bmcite, "full_hierarchical_labels", "full_hierarchical_labels", cutoff=20)
-bmcite <- PrepLabel(bmcite, "final_level_labels", "final_level_labels", cutoff=20)
+#bmcite <- PrepLabel(bmcite, "full_hierarchical_labels", "full_hierarchical_labels", cutoff=20)
+#bmcite <- PrepLabel(bmcite, "final_level_labels", "final_level_labels", cutoff=20)
 ```
 
-The `full_hierarchical_label` for each cell provides highly detailed information, but may be difficult to interpret visually compared to level-wise labels. 
+The `full_hierarchical_label` for each cell provides the model's classification at each level of granularity, with different levels separated by the '|' character. 
 
 ```{r panazimuth.labels.1}
 p2 <- DimPlot(bmcite, group.by = "full_hierarchical_labels", label.size = 1.5, repel=T, label=T) + NoLegend()
 p2
 ```
+To avoid the long length of the full hierarchical label, we also output the final level of granularity 
+
 ```{r panazimuth.labels.2, fig.width = 9}
 p3 <- DimPlot(bmcite, group.by = "final_level_labels", label.size = 3, repel=T, label=T) + NoLegend()
 p4 <- FeaturePlot(bmcite, features = "final_level_softmax_prob") 
@@ -104,10 +100,9 @@ We also postprocess our predictions to provide labels at three consistent levels
 
 * `azimuth_broad`: Corresponds to level_zero_labels (i.e. Immune cell)
 * `azimuth_medium`: Medium level of granularity (i.e. T cell)
-* `azimuth_fine`: High level of granularity (i.e. Memory CD4 T cell)
+* `azimuth_fine`: High level of granularity (i.e. Treg cell)
 
-For `azimuth_medium` and `azimuth_fine`, labels have been adjusted to return labels at different levels in the hierarchy to be consistent with common understandings of cell type granularity. 
-This means that for a certain number of cells, an `azimuth_medium` and/or `azimuth_fine` label could be more granular than its initial prediction. In such cases, these labels are likely to be an accurate description of the cell, as we use internal calculations based on probability values returned by the model, but should be handled with caution for more in-depth or formal analysis. 
+These categories provide a consistent level of granularity for each cell, but may differ from the `final_level_label`, either by forcing the model to predict further along the cell type hierarchy than its intial prediction, or by rolling back its prediction to a lower level of granularity. 
 
 ```{r refined.labels.medium}
 p5 <- DimPlot(bmcite, group.by = "azimuth_medium", label.size = 3, repel=T, label=T) + NoLegend()
