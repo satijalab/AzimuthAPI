@@ -148,6 +148,13 @@ parse_annotate_args <- function() {
   )
   
   parser$add_argument(
+    "--model_version",
+    default = "v0",
+    help = "Version of the model to use (default: 'v0')",
+    type = "character"
+  )
+  
+  parser$add_argument(
     "-i", "--init",
     default = "spectral",
     help = "Initialization method for UMAP (default: 'spectral')",
@@ -218,6 +225,7 @@ format_annotate_args <- function(args) {
     umap_seed = args$umap_seed,
     spread = args$spread,
     verbose = args$verbose,
+    model_version = args$model_version,
     init = args$init,
     process_obj = args$process_obj,
     cutoff_abs = args$cutoff_abs,
