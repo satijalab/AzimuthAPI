@@ -9,7 +9,7 @@
 #' @importFrom RCurl url.exists
 #' @export
 CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233', 
-                         port = 5000) {
+                         port = 5000, ...) {
   message("Running Pan-Human Azimuth on the cloud!")
   
   layer_name <- 'data'
@@ -38,7 +38,7 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233',
   saveRDS(object = srt, file = tmp_input)
   api_base_url <- paste0('http://', ip, ":", port)
   
-  process_rds_file(api_base_url, tmp_input)
+  process_rds_file(api_base_url, tmp_input, ...)
   srt <- readRDS(file = tmp_output)
   
   # Copy reductions
@@ -65,10 +65,10 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233',
 #' @param input_file Path to input RDS file
 #' @return NULL
 #' @importFrom httr POST GET upload_file content status_code
-process_rds_file <- function(api_base_url, file_path) {
+process_rds_file <- function(api_base_url, file_path, ...) {
   progress_url <- paste0(api_base_url, "/process_rds")
   cat("Uploading file and listening for updates...\n")
-  listen_to_progress(progress_url, file_path)
+  listen_to_progress(progress_url, file_path, ...)
   output_file_name <- gsub("\\.rds$", "_ANN.rds", basename(file_path))
   download_url <- paste0(api_base_url, "/download_output?output_file=/tmp/", 
                          output_file_name)
@@ -76,3 +76,4 @@ process_rds_file <- function(api_base_url, file_path) {
   cat("Downloading the output file...\n")
   download_output(download_url, save_path)
 } 
+
