@@ -22,6 +22,7 @@
 #' @param process_obj Whether to process the object
 #' @param cutoff_abs Absolute cutoff for label filtering
 #' @param cutoff_frac Fractional cutoff for label filtering
+#' @param model_version Version of the model to use
 #' @return Annotated Seurat object
 #' @export
 ANNotate <- function(
@@ -43,6 +44,7 @@ ANNotate <- function(
   umap_seed = 42,
   spread = 1.0,
   verbose = TRUE,
+  model_version = "v0",
   init = "spectral",
   process_obj = TRUE,
   cutoff_abs = 5,
@@ -86,6 +88,7 @@ ANNotate <- function(
     umap_seed, 
     spread,
     verbose,
+    model_version,
     init
   )
   

@@ -6,9 +6,14 @@
 #' @importFrom curl new_handle handle_setform curl_fetch_stream
 #' @importFrom jsonlite fromJSON
 #' @export
-listen_to_progress <- function(url, file_path) {
+listen_to_progress <- function(url, file_path, ...) {
   # Create a multipart form for the upload
-  form <- list(file = upload_file(file_path))
+  additional_args <- list(...)
+  additional_args <- lapply(additional_args, as.character)
+  form <- c(
+    list(file = upload_file(file_path)),
+    additional_args
+  )
   
   # Open a connection to the API using curl
   handle <- new_handle()
