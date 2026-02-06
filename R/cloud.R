@@ -15,10 +15,10 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233',
   layer_name <- 'data'
   data <- LayerData(object, assay = assay, layer = layer_name)
 
-  # check if data has been normalized, just using the first 5 cells
+  # if data exists, check if normalized, just using the first 5 cells
   # throw an error if large values, or all integer values, are detected
-  data_check <- data[,1:min(5,ncol(data))]
-  if ((max(data_check) > 15) || isTRUE(all.equal(data_check,floor(data_check)))) {
+  data_check <- if (!IsMatrixEmpty(data)) data[,1:min(5,ncol(data))] else NULL
+  if (is.null(data_check) || (max(data_check) > 15 || isTRUE(all.equal(data_check, floor(data_check))))) {
     stop("Please run NormalizeData on the data before running Azimuth")
   }
 
