@@ -77,7 +77,12 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233',
 process_rds_file <- function(api_base_url, file_path, ...) {
   progress_url <- paste0(api_base_url, "/process_rds")
   cat("Uploading file and listening for updates...\n")
-  listen_to_progress(progress_url, file_path, ...)
+  success <- listen_to_progress(progress_url, file_path, ...)
+  
+  if (!success) {
+    stop("Processing failed on the server. Please check the error messages above.")
+  }
+  
   output_file_name <- gsub("\\.rds$", "_ANN.rds", basename(file_path))
   download_url <- paste0(api_base_url, "/download_output?output_file=/tmp/", 
                          output_file_name)
