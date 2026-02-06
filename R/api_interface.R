@@ -2,7 +2,7 @@
 #'
 #' @param url API endpoint URL
 #' @param file_path Path to the file being processed
-#' @return NULL
+#' @return Logical indicating success (TRUE) or failure (FALSE)
 #' @importFrom curl new_handle handle_setform curl_fetch_stream
 #' @importFrom jsonlite fromJSON
 #' @export
@@ -21,6 +21,8 @@ listen_to_progress <- function(url, file_path, ...) {
   
   # Buffer to store partial messages
   buffer <- ""
+  # Track whether processing succeeded
+  success <- FALSE
   
   # Process the SSE stream in real time
   curl_fetch_stream(
@@ -51,6 +53,11 @@ listen_to_progress <- function(url, file_path, ...) {
           tryCatch({
             parsed <- fromJSON(json_message)
             
+            # Check for success flag
+            if (!is.null(parsed$success)) {
+              success <<- parsed$success
+            }
+            
             # Print messages based on content
             if (!is.null(parsed$message)) {
               cat(parsed$message, "\n")
@@ -78,6 +85,8 @@ listen_to_progress <- function(url, file_path, ...) {
       }
     }
   )
+  
+  return(success)
 }
 
 #' Download output file from the API
