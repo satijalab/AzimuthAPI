@@ -46,13 +46,22 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233',
     object[[i]] <- srt[[i]]
   }
   
-  # Copy metadata columns except QC ones
+  # Copy metadata columns except QC ones, matching by cell names
   md_cols <- grep("nCount_RNA|nFeature_RNA", 
                  colnames(srt@meta.data), 
                  invert = TRUE, 
                  value = TRUE)
+  
+  # Only update metadata for cells that were processed (objects can have multiple assays w/ cell IDs formatted differently)
+  assay_cells <- Cells(srt)
+  
   for (i in md_cols) {
-    object@meta.data[, i] <- srt@meta.data[, i]
+    # Initialize column with NA only if it doesn't exist
+    if (!i %in% colnames(object@meta.data)) {
+      object@meta.data[, i] <- NA
+    }
+    # Update only the processed cells
+    object@meta.data[assay_cells, i] <- srt@meta.data[assay_cells, i]
   }
   
   Idents(object) <- 'azimuth_label'
