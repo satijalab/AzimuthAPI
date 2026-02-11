@@ -79,7 +79,7 @@ process_rds_file <- function(api_base_url, file_path, ...) {
   cat("Uploading file and listening for updates...\n")
   success <- listen_to_progress(progress_url, file_path, ...)
   
-  if (!success) {
+  if (isFALSE(success)) {
     stop("Processing failed on the server. Please check the error messages above.")
   }
   
