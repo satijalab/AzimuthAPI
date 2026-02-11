@@ -2,13 +2,13 @@
 #'
 #' @param object Seurat object to annotate
 #' @param assay Name of the assay to use (default: 'RNA')
-#' @param ip IP address of the cloud server (default: '34.222.135.233')
+#' @param ip Hostname or IP address of the cloud server (default: 'azimuthapi.satijalab.org')
 #' @param port Port number for the API (default: 5000)
 #' @return Annotated Seurat object
 #' @importFrom httr POST GET upload_file content status_code
 #' @importFrom RCurl url.exists
 #' @export
-CloudAzimuth <- function(object = object, assay = 'RNA', ip = '34.222.135.233', 
+CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satijalab.org', 
                          port = 5000, ...) {
   message("Running Pan-Human Azimuth on the cloud!")
   
