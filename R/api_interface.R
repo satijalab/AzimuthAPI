@@ -22,7 +22,7 @@ listen_to_progress <- function(url, file_path, ...) {
   # Buffer to store partial messages
   buffer <- ""
   # Track whether processing succeeded
-  success <- FALSE
+  success <- NULL
   
   # Process the SSE stream in real time
   curl_fetch_stream(
