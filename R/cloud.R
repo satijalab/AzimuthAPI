@@ -8,6 +8,7 @@
 #' @return Annotated Seurat object
 #' @importFrom httr POST GET upload_file content status_code
 #' @importFrom RCurl url.exists
+#' @importFrom SeuratObject LayerData Idents IsMatrixEmpty CreateAssay5Object CreateSeuratObject Cells
 #' @export
 CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satijalab.org', 
                          port = 5000, ...) {
