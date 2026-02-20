@@ -2,6 +2,7 @@
 #'
 #' @param url API endpoint URL
 #' @param file_path Path to the file being processed
+#' @param ... Additional arguments passed to the API
 #' @return Logical indicating success (TRUE) or failure (FALSE)
 #' @importFrom curl new_handle handle_setform curl_fetch_stream
 #' @importFrom jsonlite fromJSON

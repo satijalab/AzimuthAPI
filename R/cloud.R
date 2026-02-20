@@ -4,6 +4,7 @@
 #' @param assay Name of the assay to use (default: 'RNA')
 #' @param ip Hostname or IP address of the cloud server (default: 'azimuthapi.satijalab.org')
 #' @param port Port number for the API (default: 5000)
+#' @param ... Additional arguments for the API to pass to the model
 #' @return Annotated Seurat object
 #' @importFrom httr POST GET upload_file content status_code
 #' @importFrom RCurl url.exists
@@ -71,7 +72,8 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satija
 #' Process RDS file through the cloud API
 #'
 #' @param api_base_url Base URL for the API
-#' @param input_file Path to input RDS file
+#' @param file_path Path to input RDS file
+#' @param ... Additional arguments passed to the API
 #' @return NULL
 #' @importFrom httr POST GET upload_file content status_code
 process_rds_file <- function(api_base_url, file_path, ...) {
