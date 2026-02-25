@@ -15,12 +15,22 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satija
   message("Running Pan-Human Azimuth on the cloud!")
   
   layer_name <- 'data'
-  data <- LayerData(object, assay = assay, layer = layer_name)
+  tryCatch({
+    data <- LayerData(object, assay = assay, layer = layer_name)
+  }, warning = function(w) {
+    message <- conditionMessage(w)
+    if (grepl(paste0("Layer ‘", layer_name, "’ is empty"), message)) {
+      stop(simpleError(
+          "Please run NormalizeData on the data before running Azimuth",
+          call = conditionCall(w)
+      ))
+    }
+  })
 
-  # if data exists, check if normalized, just using the first 5 cells
+  # check if data has been normalized, just using the first 5 cells
   # throw an error if large values, or all integer values, are detected
-  data_check <- if (!IsMatrixEmpty(data)) data[,1:min(5,ncol(data))] else NULL
-  if (is.null(data_check) || (max(data_check) > 15 || isTRUE(all.equal(data_check, floor(data_check))))) {
+  data_check <- data[,1:min(5,ncol(data))]
+  if ((max(data_check) > 15) || isTRUE(all.equal(data_check,floor(data_check)))) {
     stop("Please run NormalizeData on the data before running Azimuth")
   }
 
