@@ -80,6 +80,34 @@ safe_progress_stream <- function(url, handle) {
     return(FALSE)
   })
 }
+
+
+#' Listen to progress updates from the API
+#'
+#' @param url API endpoint URL
+#' @param file_path Path to the file being processed
+#' @param ... Additional arguments passed to the API
+#' @return Logical indicating success (TRUE) or failure (FALSE)
+#' @importFrom curl new_handle handle_setform curl_fetch_stream form_file
+#' @importFrom jsonlite fromJSON
+#' @export
+listen_to_progress <- function(url, file_path, ...) {
+  # Create a multipart form for the upload
+  additional_args <- list(...)
+  additional_args <- lapply(additional_args, as.character)
+
+  form <- c(
+    list(file = form_file(file_path)),
+    additional_args
+  )
+
+  # Open a connection to the API using curl
+  handle <- new_handle()
+  handle_setform(handle, .list = form)
+
+  # Track whether processing succeeded
+  success <- safe_progress_stream(url, handle)
+
   return(success)
 }
 
