@@ -54,8 +54,10 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satija
   srt <- readRDS(file = tmp_output)
   
   # Copy reductions
+  # Match assay.used slot to the assay processed
   for (i in names(srt@reductions)) {
     object[[i]] <- srt[[i]]
+    object[[i]]@assay.used <- assay
   }
   
   # Copy metadata columns except QC ones, matching by cell names
