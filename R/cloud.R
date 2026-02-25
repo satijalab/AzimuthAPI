@@ -49,7 +49,9 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satija
   tmp_output <- paste0(tmpname, "_ANN.rds")
   saveRDS(object = srt, file = tmp_input)
   api_base_url <- paste0('http://', ip, ":", port)
-  
+
+  check_api_version(api_base_url)
+
   process_rds_file(api_base_url, tmp_input, ...)
   srt <- readRDS(file = tmp_output)
   
@@ -80,6 +82,36 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satija
   
   Idents(object) <- 'azimuth_label'
   return(object)
+}
+
+#' Check local vs latest API version / ensure connection can be established to the server
+#'
+#' @param api_base_url Base URL for the API
+#' @return NULL
+#' @importFrom httr GET content status_code
+check_api_version <- function(api_base_url) {
+  version_url <- paste0(api_base_url, "/version")
+  tryCatch({
+    response <- GET(version_url)
+  }, error = function(e) {
+    if (grepl("Could not connect to server", e$message, fixed = TRUE)) {
+      stop(simpleError(
+          "Connection refused: server not running or port closed.\nPlease report at https://github.com/satijalab/AzimuthAPI/issues.",
+          call = conditionCall(e)
+      ))
+    }
+  })
+  
+  if (status_code(response) == 200) {
+    version_info <- content(response)
+    version <- version_info$version
+    if (packageVersion("AzimuthAPI") < version) {
+      warning("A new version of the AzimuthAPI package is available: ", 
+              version, "\n", "Please update to the latest version for the best experience.\n")
+    }
+  } else {
+    warning("Failed to retrieve API version information.\n")
+  }
 }
 
 #' Process RDS file through the cloud API
