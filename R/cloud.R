@@ -19,10 +19,10 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satija
     data <- LayerData(object, assay = assay, layer = layer_name)
   }, warning = function(w) {
     message <- conditionMessage(w)
-    if (grepl(paste0("Layer ‘", layer_name, "’ is empty"), message)) {
+    if (grepl(paste0("Layer.*", layer_name, ".*is empty"), message)) {
       stop(simpleError(
-          "Please run NormalizeData on the data before running Azimuth",
-          call = conditionCall(w)
+        "Please run NormalizeData on the data before running Azimuth",
+        call = conditionCall(w)
       ))
     }
   })
