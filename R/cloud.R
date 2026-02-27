@@ -8,7 +8,7 @@
 #' @return Annotated Seurat object
 #' @importFrom httr POST GET upload_file content status_code
 #' @importFrom RCurl url.exists
-#' @importFrom SeuratObject LayerData Idents IsMatrixEmpty CreateAssay5Object CreateSeuratObject Cells
+#' @importFrom SeuratObject LayerData Idents IsMatrixEmpty CreateAssay5Object CreateSeuratObject Cells Idents<-
 #' @export
 CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satijalab.org', 
                          port = 5000, ...) {
@@ -87,8 +87,11 @@ CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satija
 #' Check local vs latest API version / ensure connection can be established to the server
 #'
 #' @param api_base_url Base URL for the API
-#' @return NULL
+
 #' @importFrom httr GET content status_code
+#' @importFrom utils packageVersion
+#'
+#' @return NULL
 check_api_version <- function(api_base_url) {
   version_url <- paste0(api_base_url, "/version")
   tryCatch({

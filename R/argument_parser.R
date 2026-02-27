@@ -1,5 +1,5 @@
 #' Parse command line arguments for the ANNotate function
-#'
+#' @importFrom argparse ArgumentParser
 #' @return A list of parsed arguments
 #'
 #' @examples
@@ -9,10 +9,7 @@
 parse_annotate_args <- function() {
   # Check if argparse is available
   if (!requireNamespace("argparse", quietly = TRUE)) {
-    install.packages("argparse")
-    library(argparse)
-  } else {
-    library(argparse)
+    stop("The 'argparse' package must be installed to parse command line arguments.")
   }
   
   message("Parsing command line arguments...")
@@ -229,9 +226,8 @@ format_annotate_args <- function(args) {
     init = args$init,
     process_obj = args$process_obj,
     cutoff_abs = args$cutoff_abs,
-    cutoff_frac = args$cutoff_frac,
-    
-    )
+    cutoff_frac = args$cutoff_frac
+  )
   
   # Inform about parsed arguments
   if (args$verbose) {

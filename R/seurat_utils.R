@@ -3,6 +3,9 @@
 #' @param object Seurat object
 #' @param assay Assay name
 #' @param layer Layer name (default: "data")
+#' @importFrom methods slot
+#' @importFrom utils packageVersion
+#' @importFrom SeuratObject LayerData
 #' @return Layer data
 #' @export
 get_data <- function(object, assay, layer = "data") {
@@ -21,6 +24,11 @@ get_data <- function(object, assay, layer = "data") {
 #' @param query_obj Seurat object
 #' @param feature_names_col Column name for feature names
 #' @param assay_default Default assay name
+#' @importFrom Seurat DefaultAssay<- NormalizeData
+#' @importFrom SeuratObject Layers
+#' @importFrom Matrix Matrix
+#' @importFrom utils packageVersion
+#' @importFrom methods slotNames
 #' @return List containing processed data
 #' @export
 read_obj_min <- function(query_obj, feature_names_col, assay_default='RNA') {
@@ -83,6 +91,8 @@ read_obj_min <- function(query_obj, feature_names_col, assay_default='RNA') {
 #' @param umap_embeddings_dict Dictionary of UMAP embeddings
 #' @param query_cells_df Cell metadata
 #' @param query_obj Seurat object
+#' @importFrom SeuratObject CreateDimReducObject
+#' @importFrom Seurat DefaultAssay
 #' @return Updated Seurat object
 #' @export
 package_obj <- function(

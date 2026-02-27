@@ -4,6 +4,8 @@
 #'
 #' @param seurat_obj A Seurat object to save
 #' @param filepath Character string specifying the output path
+#' @importFrom utils packageVersion
+#' @importFrom methods slotNames slot slot<-
 #'
 #' @return Invisible filepath where the object was saved
 #'

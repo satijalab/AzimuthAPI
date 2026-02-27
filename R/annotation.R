@@ -23,7 +23,12 @@
 #' @param cutoff_abs Absolute cutoff for label filtering
 #' @param cutoff_frac Fractional cutoff for label filtering
 #' @param model_version Version of the model to use
+#' 
+#' @importFrom SeuratObject Idents<-
+#' @importFrom reticulate r_to_py
+#'
 #' @return Annotated Seurat object
+#' 
 #' @export
 ANNotate <- function(
   query_obj,
