@@ -5,6 +5,8 @@
 #'
 #' @param filepath Character string specifying the path to the RDS file
 #' @param assay_name Character string specifying the assay to use (default: "RNA")
+#' @importFrom utils packageVersion
+#' @importFrom Seurat DefaultAssay<-
 #'
 #' @return A valid Seurat object
 #'

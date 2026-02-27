@@ -1,8 +1,30 @@
-library(Seurat)
-library(dplyr)
-library(ggplot2)
-library(tibble)
-
+#' Generate a QC heatmap for Pan-human Azimuth cell type annotations based on the top markers for each cluster
+#'
+#' @param seurat_obj Seurat object to plot
+#' @param group.by Column name in the metadata to use for grouping
+#' @param cells.order Optional vector of cell names to specify the order of cells in the heatmap
+#' @param n_downsample Number of cells to downsample to for each cluster (default 200)
+#' @param save_folder_path Optional folder path to save the heatmap
+#' @param logfc_cutoff Log fold change cutoff for selecting markers (default log(2))
+#' @param n_markers Number of top markers to select for each cluster (default 10)
+#' @param text.size Size of the text labels in the heatmap (default 5)
+#' @param text.angle Angle of the text labels in the heatmap (default 90)
+#' @param min.size Minimum number of cells in a cluster to include in the heatmap
+#' @param max.size Maximum number of cells in a cluster to include in the heatmap
+#' @param min.pct Minimum percentage of cells expressing a gene to consider it as a marker (default 0.1)
+#' @param reorder Whether to reorder the clusters based on hierarchical clustering of average expression profiles (default TRUE)
+#' @param switch_id Optional column name in the metadata to switch the Idents to before plotting
+#' @param identity Optional string to append to the saved heatmap filename
+#'
+#' @importFrom Seurat FindAllMarkers ScaleData DoHeatmap SetIdent NoLegend
+#' @importFrom SeuratObject Idents Idents<- LayerData Cells
+#' @importFrom dplyr group_by filter slice_head ungroup left_join summarise across %>% mutate where arrange
+#' @importFrom stats dist cor hclust
+#' @importFrom tibble rownames_to_column column_to_rownames
+#' @importFrom ggplot2 theme element_text ggsave
+#'
+#' @return A ggplot object representing the QC heatmap
+#' @export
 make_QC_heatmap <- function(
     seurat_obj, 
     group.by=NULL, 
@@ -76,6 +98,18 @@ make_QC_heatmap <- function(
   return(plot_heatmap)
 }
 
+#' Generate QC heatmaps for Pan-human Azimuth cell type annotations, split by broad cell type categories and further subdivided if necessary
+#'
+#' @param object Seurat object containing the metadata with Azimuth annotations
+#' @param final_name Column name in the metadata for the final Azimuth annotations (default 'azimuth_fine')
+#' @param level1_name Column name in the metadata for the broad Azimuth categories (default 'azimuth_broad')
+#' @param full_name Column name in the metadata for the full hierarchical labels (default 'full_hierarchical_labels')
+#' @param min.final.group Minimum number of cells required in a final annotation group to be included in the heatmap (default 10)
+#' @param max.ids.per.plot Maximum number of final annotation groups to include in a single heatmap (default 15)
+#' @param ... Additional arguments to pass to the make_QC_heatmap function for customizing the heatmaps
+#' @importFrom SeuratObject Idents<-
+#' @return A list of ggplot objects representing the QC heatmaps for each broad cell type category, further subdivided if necessary
+#' @export
 make_azimuth_QC_heatmaps <- function(
     object, 
     final_name = 'azimuth_fine', 
