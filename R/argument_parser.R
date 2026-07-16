@@ -6,13 +6,14 @@
 #' \dontrun{
 #' args <- parse_annotate_args()
 #' }
+#' @noRd
 parse_annotate_args <- function() {
   # Check if argparse is available
   if (!requireNamespace("argparse", quietly = TRUE)) {
     stop("The 'argparse' package must be installed to parse command line arguments.")
   }
   
-  message("Parsing command line arguments...")
+  cli::cli_alert_info("Parsing command line arguments...")
   
   # Create argument parser
   parser <- ArgumentParser(description = "Command line interface for ANNotate function")
@@ -41,22 +42,22 @@ parse_annotate_args <- function() {
   
   parser$add_argument(
     "-ebs", "--eval_batch_size",
-    default = 40960,
-    help = "Batch size for evaluation (default: 40960)",
+    default = 8192,
+    help = "Batch size for evaluation (default: 8192)",
     type = "integer"
   )
   
   parser$add_argument(
     "-no", "--normalization_override",
-    action = "store_true",
+    action = "store_false",
     default = FALSE,
     help = "Override normalization (default: FALSE)"
   )
   
   parser$add_argument(
     "-ncb", "--norm_check_batch_size",
-    default = 1000,
-    help = "Batch size for normalization check (default: 1000)",
+    default = 100,
+    help = "Batch size for normalization check (default: 100)",
     type = "integer"
   )
   
@@ -73,6 +74,20 @@ parse_annotate_args <- function() {
     default = TRUE,
     help = "Refine labels (default: TRUE)"
   )  
+
+  parser$add_argument(
+    "-mtc", "--map_to_cl",
+    default = NULL,
+    help = "Colname(s) to map to Cell Ontology labels (default: NULL)",
+    type = "character"
+  )
+
+  parser$add_argument(
+    "-icl", "--include_cl_id",
+    action = "store_false",
+    default = FALSE,
+    help = "Include Cell Ontology IDs (default: FALSE)"
+  )
   
   parser$add_argument(
     "-ee", "--extract_embeddings",
@@ -196,8 +211,9 @@ parse_annotate_args <- function() {
 #' args <- parse_annotate_args()
 #' formatted_args <- format_annotate_args(args)
 #' }
+#' @noRd
 format_annotate_args <- function(args) {
-  message("Formatting arguments for ANNotate function...")
+  cli::cli_alert_info("Formatting arguments for ANNotate function...")
   
   # Convert arguments to properly named list for ANNotate
   formatted_args <- list(
@@ -212,6 +228,8 @@ format_annotate_args <- function(args) {
     norm_check_batch_size = args$norm_check_batch_size,
     output_mode = args$output_mode,
     refine_labels = args$refine_labels,
+    map_to_cl = args$map_to_cl,
+    include_cl_id = args$include_cl_id,
     extract_embeddings = args$extract_embeddings,
     umap_embeddings = args$umap_embeddings,
     n_neighbors = args$n_neighbors,
@@ -222,8 +240,8 @@ format_annotate_args <- function(args) {
     umap_seed = args$umap_seed,
     spread = args$spread,
     verbose = args$verbose,
-    model_version = args$model_version,
     init = args$init,
+    model_version = args$model_version,
     process_obj = args$process_obj,
     cutoff_abs = args$cutoff_abs,
     cutoff_frac = args$cutoff_frac
@@ -231,15 +249,15 @@ format_annotate_args <- function(args) {
   
   # Inform about parsed arguments
   if (args$verbose) {
-    message("Arguments for ANNotate function:")
+    cli::cli_alert_info("Arguments for ANNotate function:")
     for (name in names(formatted_args)) {
       value <- formatted_args[[name]]
       if (is.null(value)) {
-        message(sprintf("  %s: NULL", name))
+        cli::cli_text("  {name}: NULL")
       } else if (is.logical(value) || is.numeric(value)) {
-        message(sprintf("  %s: %s", name, value))
+        cli::cli_text("  {name}: {value}")
       } else {
-        message(sprintf("  %s: '%s'", name, value))
+        cli::cli_text("  {name}: '{value}'")
       }
     }
   }

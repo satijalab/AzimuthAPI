@@ -2,32 +2,35 @@
 % Please edit documentation in R/annotation.R
 \name{ANNotate}
 \alias{ANNotate}
-\title{Run Pan-Human Azimuth annotation}
+\title{Run Pan-human Azimuth annotation locally}
 \usage{
 ANNotate(
   query_obj,
   feature_names_col = NULL,
   annotation_pipeline = "supervised",
-  eval_batch_size = 40960,
+  eval_batch_size = 8192L,
   normalization_override = FALSE,
-  norm_check_batch_size = 1000,
+  norm_check_batch_size = 100L,
   output_mode = "minimal",
   refine_labels = TRUE,
+  map_to_cl = NULL,
+  include_cl_id = FALSE,
   extract_embeddings = TRUE,
   umap_embeddings = TRUE,
-  n_neighbors = 30,
-  n_components = 2,
+  n_neighbors = 30L,
+  n_components = 2L,
   metric = "cosine",
   min_dist = 0.3,
   umap_lr = 1,
-  umap_seed = 42,
+  umap_seed = 42L,
   spread = 1,
   verbose = TRUE,
-  model_version = "v0",
   init = "spectral",
+  model_version = "v0",
   process_obj = TRUE,
   cutoff_abs = 5,
-  cutoff_frac = 0.001
+  cutoff_frac = 0.001,
+  assay = NULL
 )
 }
 \arguments{
@@ -47,9 +50,13 @@ ANNotate(
 
 \item{refine_labels}{Whether to refine labels}
 
-\item{extract_embeddings}{Whether to azimuth embeddings}
+\item{map_to_cl}{One or more annotation columns to map to Cell Ontology labels}
 
-\item{umap_embeddings}{Whether to include UMAP embeddings}
+\item{include_cl_id}{Whether to add Cell Ontology IDs to the output metadata}
+
+\item{extract_embeddings}{Whether to extract Azimuth embeddings}
+
+\item{umap_embeddings}{Whether to include UMAP of Azimuth embeddings}
 
 \item{n_neighbors}{Number of neighbors for UMAP}
 
@@ -67,19 +74,25 @@ ANNotate(
 
 \item{verbose}{Whether to show progress}
 
-\item{model_version}{Version of the model to use}
-
 \item{init}{Initialization method for UMAP}
+
+\item{model_version}{Version of the model to use}
 
 \item{process_obj}{Whether to process the object}
 
 \item{cutoff_abs}{Absolute cutoff for label filtering}
 
 \item{cutoff_frac}{Fractional cutoff for label filtering}
+
+\item{assay}{Assay to use for annotation}
 }
 \value{
 Annotated Seurat object
 }
 \description{
-Run Pan-Human Azimuth annotation
+This function runs the Pan-human Azimuth model on a Seurat object to annotate cell types, via reticulate and the \code{panhumanpy} Python package. \strong{We recommend using the \code{CloudAzimuth} function, which runs cloud-based annotation, can handle large datasets, and performs robust error handling.}
 }
+\details{
+This function requires the \code{panhumanpy} Python package to be installed and accessible via reticulate.
+}
+\concept{annotation}
