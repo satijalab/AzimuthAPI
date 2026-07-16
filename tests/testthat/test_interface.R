@@ -2,7 +2,7 @@
 
 make_test_object <- function() {
   obj <- readRDS(test_path("test_obj.rds"))
-  return(NormalizeData(obj, verbose = FALSE))
+  return(Seurat::NormalizeData(obj, verbose = FALSE))
 }
 
 test_that("CloudAzimuth returns an annotated Seurat object", {
