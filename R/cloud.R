@@ -124,20 +124,35 @@ check_api_version <- function(api_base_url) {
 #' @param ... Additional arguments passed to the API
 #' @return NULL
 #' @importFrom httr POST GET upload_file content status_code
+#' @noRd
 process_rds_file <- function(api_base_url, file_path, ...) {
   progress_url <- paste0(api_base_url, "/process_rds")
-  cat("Uploading file and listening for updates...\n")
-  success <- listen_to_progress(progress_url, file_path, ...)
+  cli::cli_alert_info("Uploading file and listening for updates...")
+  result <- listen_to_progress(progress_url, file_path, ...)
   
-  if (isFALSE(success)) {
+  if (isFALSE(result$success)) {
     stop("Processing failed on the server. Please check the error messages above.")
   }
-  
+
   output_file_name <- gsub("\\.rds$", "_ANN.rds", basename(file_path))
-  download_url <- paste0(api_base_url, "/download_output?output_file=/tmp/", 
-                         output_file_name)
+  if (!is.null(result$output_file)) {
+    output_file_name <- basename(result$output_file)
+  }
+  download_url <- result$download_url
+  if (is.null(download_url) && !is.null(result$output_file)) {
+    download_url <- paste0(api_base_url, "/download_output?output_file=",
+                            utils::URLencode(result$output_file, reserved = TRUE)
+    )
+  }
+  if (is.null(download_url)) {
+    stop("Server did not return output file metadata for download.")
+  }
+  if (!grepl("^https?://", download_url)) {
+    download_url <- paste0(api_base_url, download_url)
+  }
   save_path <- file.path(tempdir(), output_file_name)
-  cat("Downloading the output file...\n")
+  cli::cli_alert_info("Downloading the output file...")
   download_output(download_url, save_path)
+  cli::cli_alert_success("Annotation complete. Output saved to: {save_path}")
 } 
 
