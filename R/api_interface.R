@@ -181,8 +181,8 @@ download_output <- function(url, save_path) {
 #' @noRd
 check_api_version <- function(api_base_url) {
   version_url <- paste0(api_base_url, "/version")
-  tryCatch({
-    response <- GET(version_url)
+  response <- tryCatch({
+    GET(version_url, timeout(5))
   }, error = function(e) {
     if (grepl("Could not connect to server", e$message, fixed = TRUE)) {
       stop(simpleError(
@@ -190,13 +190,14 @@ check_api_version <- function(api_base_url) {
           call = conditionCall(e)
       ))
     }
-    stop(simpleError("Error connecting to the server: {e$message}", call = conditionCall(e)))
+    stop(simpleError(paste0("Error connecting to the server: ", conditionMessage(e)), call = conditionCall(e)))
   })
   
-  if (status_code(response) == 200) {
-    latest_version <- content(response)$version
-    current_version <- as.character(packageVersion("AzimuthAPI"))
-    return(utils::compareVersion(current_version, latest_version) < 0)
+  if (status_code(response) != 200) {
+    stop(simpleError(paste0("Failed to retrieve version information from the server (HTTP ", status_code(response), ")."), call = NULL))
   }
-  stop(simpleError("Failed to retrieve version information from the server.", call = NULL))
+
+  latest_version <- content(response)$version
+  current_version <- as.character(packageVersion("AzimuthAPI"))
+  return(utils::compareVersion(current_version, latest_version) < 0)
 }
