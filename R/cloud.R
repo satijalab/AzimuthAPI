@@ -11,7 +11,7 @@
 #' @importFrom SeuratObject LayerData Idents IsMatrixEmpty CreateAssay5Object CreateSeuratObject Cells Idents<-
 #' @concept annotation
 #' @export
-CloudAzimuth <- function(object = object, assay = 'RNA', ip = '0.0.0.0', 
+CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satijalab.org', 
                          port = 5000, ...) {
 
   cli::cli_h1("Running Pan-human Azimuth on the cloud")
