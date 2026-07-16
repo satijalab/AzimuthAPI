@@ -1,7 +1,6 @@
 name: R tests
 
 on:
-  push:
   pull_request:
 
 jobs:
@@ -18,5 +17,5 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: test
 
-      - name: Run testthat
-        run: Rscript -e 'testthat::test_dir("tests/testthat", reporter = "summary")'
+      - name: Run rcmdcheck
+        run: Rscript -e 'rcmdcheck::rcmdcheck(args = c("--no-manual"), error_on = "error")'
