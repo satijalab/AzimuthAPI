@@ -1,0 +1,22 @@
+name: R tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::rcmdcheck
+          needs: test
+
+      - name: Run testthat
+        run: Rscript -e 'testthat::test_dir("tests/testthat", reporter = "summary")'
