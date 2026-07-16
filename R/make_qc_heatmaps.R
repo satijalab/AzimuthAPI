@@ -18,7 +18,7 @@
 #'
 #' @importFrom Seurat FindAllMarkers ScaleData DoHeatmap SetIdent NoLegend
 #' @importFrom SeuratObject Idents Idents<- LayerData Cells
-#' @importFrom dplyr group_by filter slice_head ungroup left_join summarise across %>% mutate where arrange
+#' @importFrom dplyr group_by filter slice_head ungroup left_join summarise across mutate where arrange
 #' @importFrom stats dist cor hclust
 #' @importFrom tibble rownames_to_column column_to_rownames
 #' @importFrom ggplot2 theme element_text ggsave
@@ -51,8 +51,8 @@ make_QC_heatmap <- function(
   }
   if (!is.null(n_downsample)) seurat_obj <- subset(seurat_obj, downsample=n_downsample)
   mark_all <- FindAllMarkers(seurat_obj,only.pos = TRUE,min.pct = min.pct)
-  mark_all %>% group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > logfc_cutoff) %>%
+  mark_all %>% group_by(.data$cluster) %>%
+    dplyr::filter(.data$avg_log2FC > logfc_cutoff) %>%
     slice_head(n = n_markers) %>%
     ungroup() -> top_markers
   
@@ -70,7 +70,7 @@ make_QC_heatmap <- function(
       as.data.frame() %>%
       rownames_to_column("Cell") %>%
       left_join(data.frame(Cell = Cells(seurat_obj), CellType = Idents(seurat_obj)), by = "Cell") %>%
-      group_by(CellType) %>%
+      group_by(.data$CellType) %>%
       summarise(across(where(is.numeric), mean, na.rm = TRUE)) %>% # Use `where(is.numeric)` to avoid non-numeric columns
       column_to_rownames("CellType")
     
@@ -86,8 +86,8 @@ make_QC_heatmap <- function(
     
     # Step 5: Reorder the top_markers dataframe based on ordered_cell_types
     top_markers <- top_markers %>%
-      mutate(cluster = factor(cluster, levels = ordered_cell_types)) %>%
-      arrange(cluster)
+      mutate(cluster = factor(.data$cluster, levels = ordered_cell_types)) %>%
+      arrange(.data$cluster)
   }
   
   cells.plot <- (names(which(!is.na(Idents(seurat_obj)))))
@@ -130,7 +130,7 @@ make_azimuth_QC_heatmaps <- function(
   
   # filter non-concordant
   # SKYLAR: Proposed fix due to ANNotate metadata column name change
-  metadata <- subset(metadata, full_consistent_hierarchy==TRUE)
+  metadata <- metadata[metadata$full_consistent_hierarchy==TRUE, ]
 
   level2_name = 'level_two_labels'
   metadata[, level2_name] <- sapply(strsplit(metadata[, full_name], "\\|"), function(x) ifelse(length(x) > 1, x[2], ""))
@@ -190,7 +190,7 @@ make_azimuth_QC_heatmaps <- function(
     tryCatch({
       plot_list[[level1]] <- make_QC_heatmap(lobj, min.size = min.final.group, identity = as.character(level1), ...)
     }, error = function(e) {
-      message(paste("Error in processing", level1, ":", e$message))
+      cli::cli_warn("Error in processing {level1}: {e$message}")
     })
   }
   return(plot_list)
