@@ -4,7 +4,13 @@
 \alias{CloudAzimuth}
 \title{Run Pan-human Azimuth annotation on the cloud}
 \usage{
-CloudAzimuth(object = object, assay = "RNA", ip = "0.0.0.0", port = 5000, ...)
+CloudAzimuth(
+  object = object,
+  assay = "RNA",
+  ip = "azimuthapi.satijalab.org",
+  port = 5000,
+  ...
+)
 }
 \arguments{
 \item{object}{Seurat object to annotate}

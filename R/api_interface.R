@@ -173,7 +173,7 @@ download_output <- function(url, save_path) {
 #'
 #' @param api_base_url Base URL for the API
 #'
-#' @importFrom httr GET content status_code
+#' @importFrom httr GET content status_code timeout
 #' @importFrom utils packageVersion
 #'
 #' @return NULL
