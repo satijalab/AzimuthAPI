@@ -1,7 +1,8 @@
 #' Check for NVIDIA GPU availability
 #'
 #' @return Logical indicating whether an NVIDIA GPU is available
-#' @export
+#' @keywords internal
+#' @noRd
 if_gpu <- function() {
   if (.Platform$OS.type == "windows") {
     # Windows-specific check

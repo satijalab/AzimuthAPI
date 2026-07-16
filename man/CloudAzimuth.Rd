@@ -2,15 +2,9 @@
 % Please edit documentation in R/cloud.R
 \name{CloudAzimuth}
 \alias{CloudAzimuth}
-\title{Run Pan-Human Azimuth annotation on the cloud}
+\title{Run Pan-human Azimuth annotation on the cloud}
 \usage{
-CloudAzimuth(
-  object = object,
-  assay = "RNA",
-  ip = "127.0.0.1",
-  port = 5000,
-  ...
-)
+CloudAzimuth(object = object, assay = "RNA", ip = "0.0.0.0", port = 5000, ...)
 }
 \arguments{
 \item{object}{Seurat object to annotate}
@@ -21,11 +15,12 @@ CloudAzimuth(
 
 \item{port}{Port number for the API (default: 5000)}
 
-\item{...}{Additional arguments for the API to pass to the model}
+\item{...}{Additional arguments for the API to pass to the model (see ANNotate function for details)}
 }
 \value{
 Annotated Seurat object
 }
 \description{
-Run Pan-Human Azimuth annotation on the cloud
+Run Pan-human Azimuth annotation on the cloud
 }
+\concept{annotation}
