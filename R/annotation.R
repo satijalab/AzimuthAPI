@@ -72,7 +72,7 @@ ANNotate <- function(
   annotate <- reticulate::import("panhumanpy.ANNotate")
   sp <- reticulate::import("scipy.sparse")
 
-  cat("Running Pan-Human Azimuth:\n")
+  cat("Running Pan-human Azimuth:\n")
   cat("\n")
   
   # Convert integers
