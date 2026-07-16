@@ -2,3 +2,5 @@
 ^scratch$
 ^test_obj\.rds$
 ^utils$
+^\.github$
+^_pkgdown\.yml$
