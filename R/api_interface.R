@@ -6,9 +6,11 @@
 #' @return Logical indicating success (TRUE) or failure (FALSE)
 #' @importFrom curl curl_fetch_stream
 #' @importFrom jsonlite fromJSON
+#' @noRd
 safe_progress_stream <- function(url, handle) {
   tryCatch({
-    success <- NULL
+    result <- list(success = NULL, output_file = NULL, download_url = NULL, job_id = NULL)
+    progress_id <- NULL
 
     # Buffer to store partial messages
     buffer <- ""
@@ -44,40 +46,80 @@ safe_progress_stream <- function(url, handle) {
               
               # Check for success flag
               if (!is.null(parsed$success)) {
-                success <<- parsed$success
+                result$success <<- parsed$success
+              }
+              if (!is.null(parsed$output_file)) {
+                result$output_file <<- parsed$output_file
+              }
+              if (!is.null(parsed$download_url)) {
+                result$download_url <<- parsed$download_url
+              }
+              if (!is.null(parsed$job_id)) {
+                result$job_id <<- parsed$job_id
               }
               
               # Print messages based on content
               if (!is.null(parsed$message)) {
-                cat(parsed$message, "\n")
+                if (isTRUE(parsed$queued)) {
+                  cli::cli_alert_warning("[Queued] {parsed$message}")
+                } else if (grepl("successfully", parsed$message, ignore.case = TRUE)) {
+                  cli::cli_alert_success("{parsed$message}")
+                } else {
+                  cli::cli_alert_info("{parsed$message}")
+                }
               }
+
+              h2_strings <- c("panhumanpy version", "reference model and parameters", "running model")
+              h2_strings <- paste(h2_strings, collapse = "|")
+
               if (!is.null(parsed$output)) {
-                cat(parsed$output, "\n")
+                if (grepl(h2_strings, parsed$output, ignore.case = TRUE)) {
+                  cli::cli_h2("{parsed$output}")
+                } else if (grepl("successfully", parsed$output, ignore.case = TRUE)) {
+                  cli::cli_alert_success("{parsed$output}")
+                } else {
+                  cli::cli_text("{parsed$output}")
+                }
               }
               if (!is.null(parsed$error)) {
-                cat(parsed$error, "\n")
+                cli::cli_alert_danger("{parsed$error}")
               }
               if (!is.null(parsed$progress)) {
-                cat("Progress:", parsed$progress, "%\n")
+                if (is.null(progress_id)) {
+                  progress_id <<- cli::cli_progress_bar(
+                    name = "Processing",
+                    total = 100,
+                    clear = FALSE,
+                    format = "{name} [{bar}] {percent}%"
+                  )
+                }
+                cli::cli_progress_update(id = progress_id, set = as.numeric(parsed$progress))
               }
               if (!is.null(parsed$status)) {
-                cat("Status:", parsed$status, "\n")
+                cli::cli_alert_info("Status: {parsed$status}")
               }
             }, error = function(e) {
               # Only print actual parsing errors, not empty or malformed messages
               if (!grepl("unexpected end", e$message)) {
-                cat("Warning: Failed to parse message:", e$message, "\n")
-                cat("Raw message:", json_message, "\n")
+                cli::cli_warn("Failed to parse message: {e$message}")
+                cli::cli_text("Raw message: {json_message}")
               }
             })
           }
         }
     })
-    return(TRUE)
+    if (!is.null(progress_id)) {
+      cli::cli_progress_done(id = progress_id)
+    }
+    if (is.null(result$success)) {
+      cli::cli_alert_danger("No completion signal received from the server.")
+      result$success <- FALSE
+      return(result)
+    }
+    return(result)
   }, error = function(e) {
-    msg <- conditionMessage(e)
-    message("Error during progress streaming: ", msg)
-    return(FALSE)
+    cli::cli_alert_danger("Error during progress streaming: {conditionMessage(e)}")
+    return(list(success = FALSE, output_file = NULL, download_url = NULL, job_id = NULL))
   })
 }
 
@@ -88,9 +130,10 @@ safe_progress_stream <- function(url, handle) {
 #' @param file_path Path to the file being processed
 #' @param ... Additional arguments passed to the API
 #' @return Logical indicating success (TRUE) or failure (FALSE)
-#' @importFrom curl new_handle handle_setform curl_fetch_stream form_file
+#' @importFrom curl new_handle handle_setform handle_setopt curl_fetch_stream form_file
 #' @importFrom jsonlite fromJSON
-#' @export
+#' @keywords internal
+#' @noRd
 listen_to_progress <- function(url, file_path, ...) {
   # Create a multipart form for the upload
   additional_args <- list(...)
@@ -103,12 +146,13 @@ listen_to_progress <- function(url, file_path, ...) {
 
   # Open a connection to the API using curl
   handle <- new_handle()
+  handle_setopt(handle, tcp_keepalive = 1L)
   handle_setform(handle, .list = form)
 
   # Track whether processing succeeded
-  success <- safe_progress_stream(url, handle)
+  result <- safe_progress_stream(url, handle)
 
-  return(success)
+  return(result)
 }
 
 #' Download output file from the API
@@ -116,30 +160,43 @@ listen_to_progress <- function(url, file_path, ...) {
 #' @param url Download URL
 #' @param save_path Path to save the downloaded file
 #' @return NULL
-#' @importFrom httr GET write_disk
+#' @importFrom httr GET write_disk status_code
+#' @noRd
 download_output <- function(url, save_path) {
-  GET(url, write_disk(save_path, overwrite = TRUE))
+  response <- GET(url, write_disk(save_path, overwrite = TRUE))
+  if (status_code(response) >= 300) {
+    stop("Failed to download output file from the server.")
+  }
 }
 
-#' Run the PanAzimuth API analysis
+#' Check local vs latest API version / ensure connection can be established to the server
 #'
-#' @param input_data Input data for analysis
-#' @param api_endpoint API endpoint URL
-#' @return Analysis results
-#' @export
-run_azimuth_api <- function(input_data, api_endpoint) {
-  # Implementation of the API analysis
-  # This is a placeholder - implement the actual API interaction logic
-  stop("Not implemented yet")
+#' @param api_base_url Base URL for the API
+#'
+#' @importFrom httr GET content status_code
+#' @importFrom utils packageVersion
+#'
+#' @return NULL
+#' @keywords internal
+#' @noRd
+check_api_version <- function(api_base_url) {
+  version_url <- paste0(api_base_url, "/version")
+  tryCatch({
+    response <- GET(version_url)
+  }, error = function(e) {
+    if (grepl("Could not connect to server", e$message, fixed = TRUE)) {
+      stop(simpleError(
+          "Connection refused: server not running or port closed.\nPlease report at https://github.com/satijalab/AzimuthAPI/issues.",
+          call = conditionCall(e)
+      ))
+    }
+    stop(simpleError("Error connecting to the server: {e$message}", call = conditionCall(e)))
+  })
+  
+  if (status_code(response) == 200) {
+    latest_version <- content(response)$version
+    current_version <- as.character(packageVersion("AzimuthAPI"))
+    return(utils::compareVersion(current_version, latest_version) < 0)
+  }
+  stop(simpleError("Failed to retrieve version information from the server.", call = NULL))
 }
-
-#' Process results from PanAzimuth API
-#'
-#' @param results Raw results from the API
-#' @return Processed results in Seurat object format
-#' @export
-process_azimuth_results <- function(results) {
-  # Implementation of results processing
-  # This is a placeholder - implement the actual results processing logic
-  stop("Not implemented yet")
-} 
