@@ -2,21 +2,59 @@
 #'
 #' @param object Seurat object to annotate
 #' @param assay Name of the assay to use (default: 'RNA')
-#' @param ip Hostname or IP address of the cloud server (default: 'azimuthapi.satijalab.org')
-#' @param port Port number for the API (default: 5000)
+#' @param ip Server hostname (default: 'azimuthapi.satijalab.org')
+#' @param port Server port (default: NULL)
+#' @param scheme Server URL scheme (default: 'https').
 #' @param ... Additional arguments for the API to pass to the model (see ANNotate function for details)
 #' @return Annotated Seurat object
+#' @details
+#' Use `CloudAzimuth(object)` for the public cloud service. The `ip`, `port`, and `scheme`
+#' arguments should not be set manually by users; the default values follow standard use.
 #' @importFrom httr POST GET upload_file content status_code
 #' @importFrom RCurl url.exists
 #' @importFrom SeuratObject LayerData Idents IsMatrixEmpty CreateAssay5Object CreateSeuratObject Cells Idents<-
 #' @concept annotation
 #' @export
 CloudAzimuth <- function(object = object, assay = 'RNA', ip = 'azimuthapi.satijalab.org', 
-                         port = 5000, ...) {
+                         port = NULL, scheme = NULL, ...) {
 
   cli::cli_h1("Running Pan-human Azimuth on the cloud")
 
-  api_base_url <- paste0('http://', ip, ":", port)
+  if (grepl("^https?://", ip)) {
+    stop("`ip` should not include 'http://' or 'https://'. Use `scheme` to choose HTTP or HTTPS.")
+  }
+
+  # the default scheme and port depend on whether the user is connecting to the production server or a custom host
+  # defaults preserve the official HTTPS path and the temporary legacy HTTP path
+  if (identical(ip, "azimuthapi.satijalab.org")) {
+    if (is.null(scheme) && is.null(port)) {
+      scheme <- "https"
+    } else if (is.null(scheme) && isTRUE(port == 5000)) {
+      scheme <- "http"
+    }
+  } else {
+    if (is.null(scheme)) {
+      scheme <- "http"
+    }
+    if (is.null(port) && identical(scheme, "http")) {
+      port <- 5000
+    }
+  }
+
+  # restrict the official host to supported public entrypoints
+  if (identical(ip, "azimuthapi.satijalab.org")) {
+    https <- identical(scheme, "https") && is.null(port)
+    http_5000 <- identical(scheme, "http") && isTRUE(port == 5000)
+    allowed_official_access <- https || http_5000
+    if (isTRUE(http_5000)) {
+      cli::cli_alert_warning("Using HTTP connection to the AzimuthAPI server. This is not recommended for security reasons and will be deprecated in the future. Please use HTTPS instead.")
+    } else if (isFALSE(allowed_official_access)) {
+      stop("For the AzimuthAPI server, use either (default) HTTPS with no port or (legacy) HTTP on port 5000.")
+    }
+  }
+
+  api_base_url <- build_cloud_api_base_url(ip = ip, port = port, scheme = scheme)
+
   update <- check_api_version(api_base_url)
 
   if (isTRUE(update)) {
@@ -134,3 +172,21 @@ process_rds_file <- function(api_base_url, file_path, ...) {
   cli::cli_alert_success("Annotation complete. Output saved to: {save_path}")
 } 
 
+#' Build base URL for the cloud API
+#'
+#' @param ip Hostname or IP address of the cloud server
+#' @param port Port number for the API, or `NULL` to omit it
+#' @param scheme URL scheme to use
+#' @return Character containing the base API URL to connect to
+#' @noRd
+build_cloud_api_base_url <- function(ip, port = NULL, scheme = "https") {
+  if (!is.character(scheme) || length(scheme) != 1 || is.na(scheme) || !scheme %in% c("http", "https")) {
+    stop("`scheme` must be either 'http' or 'https'.")
+  }
+
+  if (is.null(port) || identical(port, "")) {
+    return(paste0(scheme, "://", ip))
+  }
+
+  paste0(scheme, "://", ip, ":", port)
+}
