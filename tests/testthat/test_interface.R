@@ -23,11 +23,115 @@ test_that("CloudAzimuth returns an annotated Seurat object", {
     .package = "AzimuthAPI"
   )
 
-  annotated <- CloudAzimuth(query, ip = "azimuthapi.satijalab.org", port = 5000)
+  annotated <- CloudAzimuth(query, ip = "azimuthapi.satijalab.org")
 
   expect_s4_class(annotated, "Seurat")
   expect_true(all(c("final_level_labels", "azimuth_label") %in% colnames(annotated@meta.data)))
   expect_identical(unname(annotated@meta.data$azimuth_label), rep(c("T cell", "B cell"), length.out = ncol(query)))
+})
+
+test_that("CloudAzimuth builds HTTPS and legacy URLs correctly", {
+  expect_identical(
+    build_cloud_api_base_url("azimuthapi.satijalab.org"),
+    "https://azimuthapi.satijalab.org"
+  )
+
+  expect_identical(
+    build_cloud_api_base_url("localhost", port = 5000, scheme = "http"),
+    "http://localhost:5000"
+  )
+
+  expect_identical(
+    build_cloud_api_base_url("azimuthapi.satijalab.org", scheme = "http", port = 5000),
+    "http://azimuthapi.satijalab.org:5000"
+  )
+
+  expect_error(
+    build_cloud_api_base_url("azimuthapi.satijalab.org", scheme = "ftp"),
+    "`scheme` must be either 'http' or 'https'.",
+    fixed = TRUE
+  )
+
+})
+
+test_that("CloudAzimuth requires ip without scheme prefix", {
+  expect_error(
+    CloudAzimuth(object = NULL, ip = "https://example.org"),
+    "`ip` should not include 'http://' or 'https://'.",
+    fixed = TRUE
+  )
+})
+
+test_that("CloudAzimuth defaults to official HTTPS endpoint", {
+  query <- make_test_object()
+  expected <- query
+  expected@meta.data$final_level_labels <- rep(c("T cell", "B cell"), length.out = ncol(expected))
+  expected@meta.data$azimuth_label <- expected@meta.data$final_level_labels
+  api_base_urls <- character()
+
+  testthat::local_mocked_bindings(
+    check_api_version = function(url) {
+      api_base_urls <<- c(api_base_urls, url)
+      invisible(url)
+    },
+    process_rds_file = function(url, file_path, ...) {
+      api_base_urls <<- c(api_base_urls, url)
+      saveRDS(expected, file = sub("\\.rds$", "_ANN.rds", file_path))
+      invisible(NULL)
+    },
+    .package = "AzimuthAPI"
+  )
+
+  CloudAzimuth(query, ip = "azimuthapi.satijalab.org")
+  expect_true(all(api_base_urls[1:2] == "https://azimuthapi.satijalab.org"))
+})
+
+test_that("CloudAzimuth preserves alternate-host HTTP defaults", {
+  query <- make_test_object()
+  expected <- query
+  expected@meta.data$final_level_labels <- rep(c("T cell", "B cell"), length.out = ncol(expected))
+  expected@meta.data$azimuth_label <- expected@meta.data$final_level_labels
+  api_base_urls <- character()
+
+  testthat::local_mocked_bindings(
+    check_api_version = function(url) {
+      api_base_urls <<- c(api_base_urls, url)
+      invisible(url)
+    },
+    process_rds_file = function(url, file_path, ...) {
+      api_base_urls <<- c(api_base_urls, url)
+      saveRDS(expected, file = sub("\\.rds$", "_ANN.rds", file_path))
+      invisible(NULL)
+    },
+    .package = "AzimuthAPI"
+  )
+
+  CloudAzimuth(query, ip = "localhost")
+  expect_true(all(api_base_urls[1:2] == "http://localhost:5000"))
+})
+
+test_that("CloudAzimuth preserves legacy official HTTP when port 5000 is explicit", {
+  query <- make_test_object()
+  expected <- query
+  expected@meta.data$final_level_labels <- rep(c("T cell", "B cell"), length.out = ncol(expected))
+  expected@meta.data$azimuth_label <- expected@meta.data$final_level_labels
+  api_base_urls <- character()
+
+  testthat::local_mocked_bindings(
+    check_api_version = function(url) {
+      api_base_urls <<- c(api_base_urls, url)
+      invisible(url)
+    },
+    process_rds_file = function(url, file_path, ...) {
+      api_base_urls <<- c(api_base_urls, url)
+      saveRDS(expected, file = sub("\\.rds$", "_ANN.rds", file_path))
+      invisible(NULL)
+    },
+    .package = "AzimuthAPI"
+  )
+
+  CloudAzimuth(query, ip = "azimuthapi.satijalab.org", port = 5000)
+  expect_true(all(api_base_urls[1:2] == "http://azimuthapi.satijalab.org:5000"))
 })
 
 test_that("ANNotate returns an annotated Seurat object", {
