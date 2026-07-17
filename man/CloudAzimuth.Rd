@@ -8,7 +8,8 @@ CloudAzimuth(
   object = object,
   assay = "RNA",
   ip = "azimuthapi.satijalab.org",
-  port = 5000,
+  port = NULL,
+  scheme = NULL,
   ...
 )
 }
@@ -17,9 +18,11 @@ CloudAzimuth(
 
 \item{assay}{Name of the assay to use (default: 'RNA')}
 
-\item{ip}{Hostname or IP address of the cloud server (default: 'azimuthapi.satijalab.org')}
+\item{ip}{Server hostname (default: 'azimuthapi.satijalab.org')}
 
-\item{port}{Port number for the API (default: 5000)}
+\item{port}{Server port (default: NULL)}
+
+\item{scheme}{Server URL scheme (default: 'https').}
 
 \item{...}{Additional arguments for the API to pass to the model (see ANNotate function for details)}
 }
@@ -28,5 +31,9 @@ Annotated Seurat object
 }
 \description{
 Run Pan-human Azimuth annotation on the cloud
+}
+\details{
+Use \code{CloudAzimuth(object)} for the public cloud service. The \code{ip}, \code{port}, and \code{scheme}
+arguments should not be set manually by users; the default values follow standard use.
 }
 \concept{annotation}

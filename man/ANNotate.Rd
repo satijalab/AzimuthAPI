@@ -26,7 +26,7 @@ ANNotate(
   spread = 1,
   verbose = TRUE,
   init = "spectral",
-  model_version = "v0",
+  model_version = "v1",
   process_obj = TRUE,
   cutoff_abs = 5,
   cutoff_frac = 0.001,
@@ -76,7 +76,7 @@ ANNotate(
 
 \item{init}{Initialization method for UMAP}
 
-\item{model_version}{Version of the model to use}
+\item{model_version}{Version of the model to use (default: 'v1')}
 
 \item{process_obj}{Whether to process the object}
 

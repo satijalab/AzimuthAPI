@@ -1,6 +1,6 @@
 # AzimuthAPI
 
-## Version 0.9.0
+## Version 1.0.0
 
 An R package providing an interface to the Pan-human Azimuth neural network, enabling users to run cell type annotation on single-cell and spatial transcriptomics data.
 
@@ -15,7 +15,7 @@ Two options for annotation are available:
 ## Installation
 
 ```r
-# Install devtools if not already installed
+# Install remotes if not already installed
 install.packages("remotes")
 
 # Install AzimuthAPI from GitHub
