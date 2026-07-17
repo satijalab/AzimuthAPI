@@ -161,8 +161,8 @@ parse_annotate_args <- function() {
   
   parser$add_argument(
     "--model_version",
-    default = "v0",
-    help = "Version of the model to use (default: 'v0')",
+    default = "v1",
+    help = "Version of the model to use (default: 'v1')",
     type = "character"
   )
   
