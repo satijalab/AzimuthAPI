@@ -50,11 +50,22 @@ make_QC_heatmap <- function(
     seurat_obj <- subset(seurat_obj,idents = names(which(table(Idents(seurat_obj))<=max.size)))
   }
   if (!is.null(n_downsample)) seurat_obj <- subset(seurat_obj, downsample=n_downsample)
+
+  ident_groups <- table(Idents(seurat_obj))
+  ident_groups <- ident_groups[ident_groups > 0]
+  if (length(ident_groups) < 2) {
+    stop("QC heatmaps require at least two identity groups with cells after filtering.")
+  }
+
   mark_all <- FindAllMarkers(seurat_obj,only.pos = TRUE,min.pct = min.pct)
   mark_all %>% group_by(.data$cluster) %>%
     dplyr::filter(.data$avg_log2FC > logfc_cutoff) %>%
     slice_head(n = n_markers) %>%
     ungroup() -> top_markers
+
+  if (nrow(top_markers) == 0) {
+    stop("No marker genes were identified for the requested identity groups.")
+  }
   
   if (!is.null(switch_id)) {
     Idents(seurat_obj) <- switch_id
@@ -187,6 +198,12 @@ make_azimuth_QC_heatmaps <- function(
   for (level1 in names(result_list)) {
     lobj <- subset(object,cells = rownames(result_list[[level1]]))
     Idents(lobj) <- final_name
+    ident_groups <- table(Idents(lobj))
+    ident_groups <- ident_groups[ident_groups > 0]
+    if (length(ident_groups) < 2) {
+      cli::cli_warn("Skipping {level1}; QC heatmaps require at least two final annotation groups with cells.")
+      next
+    }
     tryCatch({
       plot_list[[level1]] <- make_QC_heatmap(lobj, min.size = min.final.group, identity = as.character(level1), ...)
     }, error = function(e) {
