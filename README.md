@@ -2,7 +2,7 @@
 
 [![Better Stack Badge](https://uptime.betterstack.com/status-badges/v1/monitor/2k7ub.svg)](https://uptime.betterstack.com/?utm_source=status_badge)
 
-## Version 1.0.0 
+## Version 1.0.1
 
 An R package providing an interface to the Pan-human Azimuth neural network, enabling users to run cell type annotation on single-cell and spatial transcriptomics data.
 
